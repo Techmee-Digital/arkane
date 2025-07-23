@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid bg-dark text-light p-4">
+
+  <ul class="nav nav-pills nav-fill mb-4 bg-secondary rounded">
+    <li class="nav-item">
+      <a class="nav-link {% if active_tab=='duplicate' %}active{% endif %}"
+         href="{{ url_for('tools', tab='duplicate', token=dedupe.token) }}">
+        Duplicate Checker
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if active_tab=='search' %}active{% endif %}"
+         href="{{ url_for('tools', tab='search', token=dedupe.token) }}">
+        Search Email
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if active_tab=='merge' %}active{% endif %}"
+         href="{{ url_for('tools', tab='merge', token=dedupe.token) }}">
+        Bulk Merge
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if active_tab=='viewdb' %}active{% endif %}"
+         href="{{ url_for('tools', tab='viewdb', token=dedupe.token) }}">
+        View Leads
+      </a>
+    </li>
+  </ul>
+
+  
+  {% if active_tab=='duplicate' %}
+    <form id="dedupeForm" method="post" enctype="multipart/form-data"
+          class="d-flex align-items-end mb-3 gap-2">
+      <input type="hidden" name="action" value="dedupe">
+      <div class="d-flex flex-column">
+        <label class="form-label text-light">Files</label>
+        <input type="file" name="file_upload" multiple accept=".xls,.xlsx"
+               required
+               class="form-control form-control-dark bg-secondary text-light border-light">
+      </div>
+      <button type="submit" class="btn btn-primary">Run Check</button>
+      <!-- drop token to clear -->
+      <a href="{{ url_for('tools', tab='duplicate') }}"
+         class="btn btn-dark">Refresh</a>
+    </form>
+
+    {% if dedupe.token %}
+      <div class="mb-3">
+        <form method="post" class="d-inline me-2">
+          <input type="hidden" name="action" value="save_all">
+          <input type="hidden" name="token" value="{{ dedupe.token }}">
+          <button class="btn btn-success">Save All</button>
+        </form>
+        <form method="post" class="d-inline">
+          <input type="hidden" name="action" value="save_dup">
+          <input type="hidden" name="token" value="{{ dedupe.token }}">
+          <button class="btn btn-warning">Save Duplicates</button>
+        </form>
+      </div>
+
+      <div class="mb-2 bg-secondary p-2 text-dark rounded">
+        Total leads: <strong>{{ dedupe.count_all }}</strong>
+        &nbsp;|&nbsp;
+        Duplicates: <strong>{{ dedupe.count_dup }}</strong>
+        &nbsp;|&nbsp;
+        Sources: <em>{{ dedupe.sources }}</em>
+      </div>
+      <div class="form-check form-switch mb-3">
+  <input class="form-check-input" type="checkbox" id="show_dups">
+  <label class="form-check-label" for="show_dups" style="color: black;">
+  Only show Duplicates
+</label>
+</div>
+
+      <div class="table-responsive">
+        <table class="table table-dark table-striped">
+          <thead class="table-secondary text-dark">
+            <tr>
+              {% for f in dedupe.fields %}<th>{{ f }}</th>{% endfor %}
+              <th>Origin</th>
+              <th>Duplicate</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in dedupe.rows %}
+            <tr data-dup="{{ '1' if r.duplicate else '0' }}">
+              {% for f in dedupe.fields %}
+                <td>{{ r[f] }}</td>
+              {% endfor %}
+              <td>{{ r.origin }}</td>
+              <td>{{ 'Duplicate' if r.duplicate else '' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <script>
+        document.getElementById('show_dups').onchange = function(){
+          document.querySelectorAll('tbody tr').forEach(tr=>{
+            tr.style.display = (this.checked && tr.dataset.dup==='0')? 'none':'';
+          });
+        };
+      </script>
+    {% endif %}
+  {% endif %}
+
+  
+  {% if active_tab=='search' %}
+    <form method="post" class="mb-3">
+      <input type="hidden" name="action" value="search">
+      <div class="input-group">
+        <input type="email" name="search_email"
+               class="form-control form-control-dark bg-secondary text-light border-light"
+               placeholder="Enter email" required>
+        <button class="btn btn-primary">Search</button>
+      </div>
+    </form>
+    {% if search_results %}
+    <div class="table-responsive">
+      <table class="table table-dark table-striped">
+        <thead class="table-secondary text-dark">
+          <tr>
+            <th>Email</th><th>Company</th><th>Quarter</th>
+            <th>Campaign</th><th>Source</th><th>Uploaded</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in search_results %}
+          <tr>
+            <td>{{ l.email }}</td>
+            <td>{{ l.company }}</td>
+            <td>{{ l.quarter }}</td>
+            <td>{{ l.campaign }}</td>
+            <td>{{ l.source_file }}</td>
+            <td>{{ l.upload_date }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  {% endif %}
+
+  
+  {% if active_tab=='merge' %}
+    <form method="post" enctype="multipart/form-data" class="mb-3 row g-2 align-items-end">
+      <input type="hidden" name="action" value="merge">
+      <div class="col-auto">
+        <label class="form-label text-light">Files</label>
+        <input type="file" name="file_merge" multiple accept=".xls,.xlsx"
+               required
+               class="form-control form-control-dark bg-secondary text-light border-light">
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-primary">Merge</button>
+      </div>
+      {% if merge.download %}
+      <div class="col-auto">
+        <a href="{{ url_for('uploaded_file', fn=merge.download) }}"
+           class="btn btn-success">Download</a>
+      </div>
+      {% endif %}
+    </form>
+    {% if merge.records %}
+    <div class="table-responsive">
+      <table class="table table-dark table-striped">
+        <thead class="table-secondary text-dark">
+          <tr>{% for h in merge.headers %}<th>{{ h }}</th>{% endfor %}</tr>
+        </thead>
+        <tbody>
+          {% for r in merge.records %}
+          <tr>{% for h in merge.headers %}<td>{{ r[h] }}</td>{% endfor %}</tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  {% endif %}
+
+  
+  {% if active_tab=='viewdb' %}
+  <div class="table-responsive">
+    <table class="table table-dark table-striped">
+      <thead class="table-secondary text-dark">
+        <tr>
+          <th>Email</th><th>Company</th><th>Quarter</th>
+          <th>Campaign</th><th>Source</th><th>Uploaded</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in viewdb %}
+        <tr>
+          <td>{{ l.email }}</td>
+          <td>{{ l.company }}</td>
+          <td>{{ l.quarter }}</td>
+          <td>{{ l.campaign }}</td>
+          <td>{{ l.source_file }}</td>
+          <td>{{ l.upload_date }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
