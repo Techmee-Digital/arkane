@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+  <h3>Merged Excel</h3>
+  <p>
+    <a class="btn btn-success" href="{{ url_for('uploaded_file', fn=download) }}">
+      Download Merged File
+    </a>
+  </p>
+  <div class="table-responsive" style="max-height:400px; overflow:auto">
+    <table class="table table-sm table-striped">
+      <thead>
+        <tr>
+          {% for h in headers %}<th>{{h}}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in records %}
+        <tr>
+          {% for h in headers %}<td>{{row.get(h,"")}}</td>{% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}
