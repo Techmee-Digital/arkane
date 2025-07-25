@@ -125,7 +125,7 @@
         <thead class="table-secondary text-dark">
           <tr>
             <th>Email</th><th>Company</th><th>Quarter</th>
-            <th>Campaign</th><th>Source</th><th>Uploaded</th>
+            <th>Campaign</th><th>Source</th><th>Exclusions</th><th>Uploaded</th>
           </tr>
         </thead>
         <tbody>
@@ -136,6 +136,7 @@
             <td>{{ l.quarter }}</td>
             <td>{{ l.campaign }}</td>
             <td>{{ l.source_file }}</td>
+            <td>{{ l.exclusions }}</td>
             <td>{{ l.upload_date }}</td>
           </tr>
           {% endfor %}
@@ -199,7 +200,8 @@
           <td>{{ l.quarter }}</td>
           <td>{{ l.campaign }}</td>
           <td>{{ l.source_file }}</td>
-          <td>{{ l.upload_date }}</td>
+          <td>{{ l.exclusions }}</td> 
+          <td>{{ l.upload_date.strftime('%Y-%m-%d %H:%M:%S') }}</td>  
         </tr>
         {% endfor %}
       </tbody>

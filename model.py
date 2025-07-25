@@ -19,6 +19,7 @@ class Lead(db.Model):
     quarter = db.Column(db.String(10))
     campaign = db.Column(db.String(100))
     source_file = db.Column(db.String(255))
+    exclusions = db.Column(db.String(255)) 
     upload_date = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
 
@@ -27,7 +28,7 @@ class User(UserMixin, db.Model):
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
 
     def set_password(self, password: str):
         """Hash & store the password."""
