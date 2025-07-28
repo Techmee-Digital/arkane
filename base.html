@@ -41,16 +41,6 @@
 
     {% if current_user.is_authenticated %}
         <nav class="sidebar nav flex-column p-3">
-  <a class="nav-link mt-4 {% if active_tab=='duplicate' %}active{% endif %}"
-     href="{{ url_for('tools', tab='duplicate') }}">
-    Duplicate Checker
-  </a>
-        <a class="nav-link {% if active_tab=='search' %}active{% endif %}"
-           href="{{ url_for('tools', tab='search') }}">Search Email</a>
-        <a class="nav-link {% if active_tab=='merge' %}active{% endif %}"
-           href="{{ url_for('tools', tab='merge') }}">Merge Files</a>
-        <a class="nav-link {% if active_tab=='view' %}active{% endif %}"
-           href="{{ url_for('tools', tab='view') }}">View Leads</a>
         <a class="nav-link text-danger mt-auto"
            href="{{ url_for('logout') }}">Logout</a>
       </nav>
