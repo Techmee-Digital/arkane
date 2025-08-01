@@ -1,20 +1,18 @@
 services:
   arkane-web:
-    build: .
+    image: ghcr.io/techmee-digital/arkane:latest
     container_name: arkane-web
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5003:5000"
     volumes:
       - ./uploads:/app/uploads
     env_file:
       - .env
-    # We can't use depends_on, as the 'mysql' container is managed outside of this file.
-    # The restart policy will help if the app starts before the database is ready.
     restart: unless-stopped
     networks:
-      - arkane-net
+      - default
+      - mysql
 
 networks:
-  arkane-net:
-    # This tells Docker Compose to use a network that already exists.
+  mysql:
     external: true
