@@ -21,20 +21,38 @@ from model import db, Lead, User
 
 load_dotenv()
 
+
 def create_app():
     app = Flask(__name__)
 
-    app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET')
+    # ─── SECRET KEY ─────────────────────────────────────────────────────────
+    secret = os.getenv('FLASK_SECRET_KEY')
+    if not secret:
+        raise RuntimeError("FLASK_SECRET_KEY must be set in the environment")
+    app.config['SECRET_KEY'] = secret
+    app.secret_key = secret
+
+    # ─── DATABASE & OTHER CONFIG ─────────────────────────────────────────────
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', str(Path(__file__).parent / 'uploads'))
-    app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_MB', 16)) * 1024 * 1024
-    app.config['ALLOWED_EXTENSIONS'] = set(os.getenv('ALLOWED_EXT', 'xls,xlsx').split(','))
+    app.config['UPLOAD_FOLDER'] = os.getenv(
+        'UPLOAD_FOLDER',
+        str(Path(__file__).parent / 'uploads')
+    )
+    app.config['MAX_CONTENT_LENGTH'] = int(
+        os.getenv('MAX_CONTENT_MB', 16)) * 1024 * 1024
+    app.config['ALLOWED_EXTENSIONS'] = set(
+        os.getenv('ALLOWED_EXT', 'xls,xlsx').split(',')
+    )
 
+    # ensure upload folder exists
     Path(app.config['UPLOAD_FOLDER']).mkdir(parents=True, exist_ok=True)
 
+    # ─── Initialize extensions ──────────────────────────────────────────────
     db.init_app(app)
     Migrate(app, db)
+
+    # …and then the rest of your login_manager & route definitions…
 
     login_manager = LoginManager()
     login_manager.init_app(app)
@@ -45,7 +63,8 @@ def create_app():
         return db.session.get(User, int(user_id))
 
     def allowed_file(filename: str) -> bool:
-        return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+        return '.' in filename and filename.rsplit(
+    '.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
     def normalize(s):
         return str(s).strip().lower()
@@ -54,11 +73,13 @@ def create_app():
         for c in cols:
             if 'mail' in c.lower():
                 return c
-        raise KeyError("No column containing 'mail'; rename your email column.")
+        raise KeyError(
+            "No column containing 'mail'; rename your email column.")
 
     @app.errorhandler(413)
     def file_too_large(e):
-        flash(f"File too large (max {app.config['MAX_CONTENT_LENGTH']//(1024*1024)} MB)", "danger")
+        flash(
+            f"File too large (max {app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)} MB)", "danger")
         return redirect(request.url)
 
     @app.route('/login', methods=['GET', 'POST'])
@@ -93,7 +114,8 @@ def create_app():
         all_db_leads = Lead.query.order_by(Lead.upload_date.desc()).all()
 
         if request.method == 'GET' and token:
-            cache_path = Path(app.config['UPLOAD_FOLDER']) / f"_cache_{token}.parquet"
+            cache_path = Path(
+    app.config['UPLOAD_FOLDER']) / f"_cache_{token}.parquet"
             if cache_path.exists():
                 big = pd.read_parquet(cache_path)
                 big.columns = [c.lower() for c in big.columns]
@@ -115,7 +137,8 @@ def create_app():
                                               .order_by(Lead.upload_date.desc()).first()
                             camp = lead.campaign or ""
                             qtr = lead.quarter or ""
-                            d["origin"] = f"DB: {camp}/{qtr}" if (camp or qtr) else "DB"
+                            d["origin"] = f"DB: {camp}/{qtr}" if (
+                                camp or qtr) else "DB"
                         else:
                             d["origin"] = "Current Sheet"
                     else:
@@ -145,7 +168,9 @@ def create_app():
                 dfs, srcs = [], []
                 for f in files:
                     if not allowed_file(f.filename):
-                        flash(f"Unsupported file type: {f.filename}", "warning")
+                        flash(
+    f"Unsupported file type: {
+        f.filename}", "warning")
                         continue
                     fn = secure_filename(f.filename)
                     path = Path(app.config['UPLOAD_FOLDER']) / f"{token}_{fn}"
@@ -156,7 +181,17 @@ def create_app():
                     df = df.rename(columns={col: "Email"})
                     df["Email"] = df["Email"].map(normalize)
                     df["__src__"] = fn
+
                     df.columns = [str(c).strip().lower() for c in df.columns]
+
+                    if "campaign name" in df.columns:
+                        df.rename(
+    columns={
+        "campaign name": "campaign"},
+         inplace=True)
+
+                    if "exclusions" not in df.columns:
+                       df["exclusions"] = ""
 
                     dfs.append(df)
                     srcs.append(fn)
@@ -184,14 +219,16 @@ def create_app():
                                               .order_by(Lead.upload_date.desc()).first()
                             camp = lead.campaign or ""
                             qtr = lead.quarter or ""
-                            d["origin"] = f"DB: {camp}/{qtr}" if (camp or qtr) else "DB"
+                            d["origin"] = f"DB: {camp}/{qtr}" if (
+                                camp or qtr) else "DB"
                         else:
                             d["origin"] = "Current Sheet"
                     else:
                         d["origin"] = ""
                     rows.append(d)
 
-                cache_path = Path(app.config['UPLOAD_FOLDER']) / f"_cache_{token}.parquet"
+                cache_path = Path(
+    app.config['UPLOAD_FOLDER']) / f"_cache_{token}.parquet"
                 big.to_parquet(cache_path)
 
                 dedupe_ctx = {
@@ -207,12 +244,23 @@ def create_app():
             elif action in ("save_all", "save_dup"):
                 token = request.form.get("token", "")
                 cache_path = Path(app.config['UPLOAD_FOLDER']) / f"_cache_{token}.parquet"
+
                 if not cache_path.exists():
-                    flash("No data to save; re‑run check first", "warning")
+                    flash("No data to save; re-run check first", "warning")
                     return redirect(url_for("tools", tab="duplicate"))
 
+                # Load cached DataFrame and normalize column names
                 df = pd.read_parquet(cache_path)
                 df.columns = [c.lower() for c in df.columns]
+
+                # Alias “campaign name” → “campaign”
+                if "campaign name" in df.columns:
+                    df.rename(columns={"campaign name": "campaign"}, inplace=True)
+                # Ensure an exclusions column always exists
+                if "exclusions" not in df.columns:
+                    df["exclusions"] = ""
+
+                # Figure out which emails are duplicates or existing
                 existing = {
                     e for (e,) in db.session.query(Lead.email)
                     .filter(Lead.email.in_(df["email"])).all()
@@ -220,21 +268,25 @@ def create_app():
                 mask_dup = df.duplicated("email", keep=False)
                 dup_set = set(df.loc[mask_dup, "email"]) | existing
 
+                # Persist rows to the database
                 saved = 0
                 for _, r in df.iterrows():
                     email = r["email"]
                     do = (action == "save_all") or (email in dup_set)
-                    if do:
-                        lead = Lead(
-                            email=email,
-                            company=r.get("company", ""),
-                            quarter=r.get("quarter", ""),
-                            campaign=r.get("campaign", ""),
-                            source_file=r["__src__"],
-                            exclusions=r.get("exclusions", "")
-                        )
-                        db.session.add(lead)
-                        saved += 1
+                    if not do:
+                        continue
+
+                    lead = Lead(
+                        email=email,
+                        company=r.get("company", ""),
+                        quarter=r.get("quarter", ""),
+                        campaign=r.get("campaign", ""),
+                        source_file=r.get("__src__", ""),
+                        exclusions=r.get("exclusions", "")
+                    )
+                    db.session.add(lead)
+                    saved += 1
+
                 db.session.commit()
                 flash(f"{saved} rows saved", "success")
                 return redirect(url_for("tools", tab="duplicate"))
@@ -245,6 +297,7 @@ def create_app():
                 if not search_results:
                     flash("No matches found", "info")
                 active_tab = "search"
+
 
             elif action == "merge":
                 files = request.files.getlist("file_merge")
