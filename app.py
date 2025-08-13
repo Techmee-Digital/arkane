@@ -111,7 +111,6 @@ def create_app():
                       "count_all": 0, "count_dup": 0, "sources": ""}
         search_results = None
         merge_ctx = {}
-        all_db_leads = Lead.query.order_by(Lead.upload_date.desc()).all()
 
         if request.method == 'GET' and token:
             cache_path = Path(
@@ -334,6 +333,27 @@ def create_app():
                     "download": out_fn
                 }
                 active_tab = "merge"
+                    # ─── Viewdb with checkbox-controlled filters ────────────────────────
+            if active_tab == 'viewdb':
+            # only read the search terms if their box was checked
+                enable_email   = request.values.get('enable_email')   == '1'
+                enable_company = request.values.get('enable_company') == '1'
+
+            # normalize inputs (empty if not enabled)
+            email_q   = normalize(request.values.get('filter_email', ''))   if enable_email   else ''
+            company_q = normalize(request.values.get('filter_company', '')) if enable_company else ''
+
+            query = Lead.query
+            if enable_email and email_q:
+                query = query.filter(Lead.email.ilike(f"%{email_q}%"))
+            if enable_company and company_q:
+                query = query.filter(Lead.company.ilike(f"%{company_q}%"))
+
+            all_db_leads = query.order_by(Lead.upload_date.desc()).all()
+        else:
+            # fallback on other tabs
+            all_db_leads = Lead.query.order_by(Lead.upload_date.desc()).all()
+
 
         return render_template(
             "tools.html",
