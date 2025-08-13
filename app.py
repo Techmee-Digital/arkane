@@ -297,7 +297,6 @@ def create_app():
                     flash("No matches found", "info")
                 active_tab = "search"
 
-
             elif action == "merge":
                 files = request.files.getlist("file_merge")
                 if not files or not files[0].filename:
@@ -318,9 +317,10 @@ def create_app():
                     return redirect(url_for("tools", tab="merge"))
 
                 hdrs = sorted(hdrs)
-                merged = pd.concat([
-                    df.reindex(columns=hdrs, fill_value="") for df in dfs
-                ], ignore_index=True)
+                merged = pd.concat(
+                    [df.reindex(columns=hdrs, fill_value="") for df in dfs],
+                    ignore_index=True
+                )
 
                 token = uuid.uuid4().hex
                 out_fn = f"merged_{token}.xlsx"
@@ -333,27 +333,32 @@ def create_app():
                     "download": out_fn
                 }
                 active_tab = "merge"
-                    # ─── Viewdb with checkbox-controlled filters ────────────────────────
-            if active_tab == 'viewdb':
-            # only read the search terms if their box was checked
-                enable_email   = request.values.get('enable_email')   == '1'
-                enable_company = request.values.get('enable_company') == '1'
 
-            # normalize inputs (empty if not enabled)
-            email_q   = normalize(request.values.get('filter_email', ''))   if enable_email   else ''
-            company_q = normalize(request.values.get('filter_company', '')) if enable_company else ''
+        # ===================== END OF POST HANDLING =====================
+
+        # ─── Viewdb with checkbox-controlled filters (Campaign + Email) ───
+        if active_tab == 'viewdb':
+            enable_email    = request.values.get('enable_email') == '1'
+            enable_campaign = request.values.get('enable_campaign') == '1'
+            enable_company  = request.values.get('enable_company') == '1'
+
+            email_q    = normalize(request.values.get('filter_email', '')) \
+                         if enable_email else ''
+            campaign_q = normalize(request.values.get('filter_campaign', '')) \
+                         if enable_campaign else ''
+            company_q  = normalize(request.values.get('filter_company', ''))  if enable_company  else ''
 
             query = Lead.query
             if enable_email and email_q:
                 query = query.filter(Lead.email.ilike(f"%{email_q}%"))
+            if enable_campaign and campaign_q:
+                query = query.filter(Lead.campaign.ilike(f"%{campaign_q}%"))
             if enable_company and company_q:
                 query = query.filter(Lead.company.ilike(f"%{company_q}%"))
-
             all_db_leads = query.order_by(Lead.upload_date.desc()).all()
         else:
             # fallback on other tabs
             all_db_leads = Lead.query.order_by(Lead.upload_date.desc()).all()
-
 
         return render_template(
             "tools.html",
@@ -363,7 +368,6 @@ def create_app():
             merge=merge_ctx,
             viewdb=all_db_leads
         )
-
     @app.route("/uploads/<path:filename>")
     @login_required
     def uploaded_file(filename):
