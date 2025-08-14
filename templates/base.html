@@ -16,7 +16,7 @@
         min-height: 100vh;
         position: fixed;
         background: #272d3b;
-      } 
+      }
       .sidebar .nav-link {
         color: #bbb;
       }
@@ -39,19 +39,22 @@
   <body>
 
     {% if current_user.is_authenticated %}
-        <nav class="sidebar nav flex-column p-3">
+      <nav class="sidebar nav flex-column p-3">
         <a class="nav-link text-danger mt-auto"
            href="{{ url_for('logout') }}">Logout</a>
       </nav>
-    </div>
     {% endif %}
 
     <div class="{% if current_user.is_authenticated %}content{% else %}container{% endif %}">
+      {# --- THIS IS THE IMPROVED BLOCK FOR FLASH MESSAGES --- #}
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-          <div class="mt-2">
-            {% for cat,msg in messages %}
-              <div class="alert alert-{{cat}}" role="alert">{{ msg }}</div>
+          <div class="container mt-3" style="position: absolute; top: 0; left: 220px; right: 20px; z-index: 1050;">
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
             {% endfor %}
           </div>
         {% endif %}
@@ -60,9 +63,8 @@
       {% block content %}{% endblock %}
     </div>
 
-    <!-- Bootstrap & Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- our small custom code -->
+    
     <script src="{{ url_for('static', filename='custom.js') }}"></script>
   </body>
 </html>

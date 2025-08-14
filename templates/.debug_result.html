@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Debug Result</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@5/dist/cyborg/bootstrap.min.css">
+  </head>
+  <body class="p-4">
+    <div class="card border-light">
+      <div class="card-header"><h1>Debug Results</h1></div>
+      <div class="card-body">
+        <ul class="list-group">
+          {% for message in messages %}
+            <li class="list-group-item">{{ message }}</li>
+          {% endfor %}
+        </ul>
+        <a href="{{ url_for('tools', tab='viewdb') }}" class="btn btn-primary mt-3">Go Back</a>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,12 +1,13 @@
 import os
 import uuid
+import io
 from pathlib import Path
 from datetime import datetime
 from sqlalchemy import func
 import pandas as pd
 from flask import (
     Flask, render_template, request, flash,
-    redirect, url_for, send_from_directory, current_app
+    redirect, url_for, send_from_directory, current_app, send_file
 )
 from werkzeug.utils import secure_filename
 from flask_migrate import Migrate
@@ -32,7 +33,7 @@ def create_app():
     app.config['SECRET_KEY'] = secret
     app.secret_key = secret
 
-    # ─── DATABASE & OTHER CONFIG ─────────────────────────────────────────────
+    # ─── DATABASE & OTHER CONFIG ─────────────────────────────────────
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['UPLOAD_FOLDER'] = os.getenv(
@@ -49,12 +50,11 @@ def create_app():
     # ensure upload folder exists
     Path(app.config['UPLOAD_FOLDER']).mkdir(parents=True, exist_ok=True)
 
-    # ─── Initialize extensions ──────────────────────────────────────────────
+    # ─── Initialize extensions ──────────────────────────────────────
     db.init_app(app)
     Migrate(app, db)
 
-    # …and then the rest of your login_manager & route definitions…
-
+    # ─── Login manager setup ─────────────────────────────────────────
     login_manager = LoginManager()
     login_manager.init_app(app)
     login_manager.login_view = 'login'
@@ -85,6 +85,7 @@ def create_app():
             f"File too large (max {app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)} MB)", "danger")
         return redirect(request.url)
 
+    # ─── Login routes ──────────────────────────────────────────────
     @app.route('/login', methods=['GET', 'POST'])
     def login():
         if current_user.is_authenticated:
@@ -105,321 +106,365 @@ def create_app():
         logout_user()
         return redirect(url_for('login'))
 
+   # ─── Main tool route ───────────────────────────────────────────
     @app.route('/', methods=['GET', 'POST'])
     @login_required
     def tools():
         active_tab = request.values.get('tab', 'duplicate')
         token = request.values.get('token', '')
 
-    # default contexts
-    dedupe_ctx = {"token": "", "rows": [], "fields": [], "dup_set": set(),
-                  "count_all": 0, "count_dup": 0, "sources": ""}
-    search_results = None
-    merge_ctx = {}
+        # default contexts
+        dedupe_ctx = {"token": "", "rows": [], "fields": [], "dup_set": set(),
+                      "count_all": 0, "count_dup": 0, "sources": ""}
+        search_results = None
+        merge_ctx = {}
 
-    # ---------- GET (token refresh for Duplicate Checker) ----------
-    if request.method == 'GET' and token:
-        cache_path = Path(current_app.config['UPLOAD_FOLDER']) / f"_cache_{token}.parquet"
-        if cache_path.exists():
-            big = pd.read_parquet(cache_path)
-            big.columns = [c.lower() for c in big.columns]
-            mask_dup = big.duplicated("email", keep=False)
-            existing = {
-                e for (e,) in db.session.query(Lead.email)
-                .filter(Lead.email.in_(big["email"])).all()
-            }
-            dup_set = set(big.loc[mask_dup, "email"]) | existing
+        # ---------- GET (token refresh for Duplicate Checker) ----------
+        if request.method == 'GET' and token:
+            cache_path = Path(current_app.config['UPLOAD_FOLDER']) / f"_cache_{token}.parquet"
+            if cache_path.exists():
+                big = pd.read_parquet(cache_path)
+                big.columns = [c.lower() for c in big.columns]
+                mask_dup = big.duplicated("email", keep=False)
+                existing = {
+                    e for (e,) in db.session.query(Lead.email)
+                    .filter(Lead.email.in_(big["email"])).all()
+                }
+                dup_set = set(big.loc[mask_dup, "email"]) | existing
 
-            rows = []
-            for _, r in big.iterrows():
-                d = r.to_dict()
-                is_dup = r["email"] in dup_set
-                d["duplicate"] = is_dup
-                if is_dup:
-                    if r["email"] in existing:
-                        lead = (Lead.query.filter_by(email=r["email"])
-                                .order_by(Lead.upload_date.desc()).first())
-                        camp = lead.campaign or ""
-                        qtr = lead.quarter or ""
-                        d["origin"] = f"DB: {camp}/{qtr}" if (camp or qtr) else "DB"
+                rows = []
+                for _, r in big.iterrows():
+                    d = r.to_dict()
+                    is_dup = r["email"] in dup_set
+                    d["duplicate"] = is_dup
+                    if is_dup:
+                        if r["email"] in existing:
+                            lead = (Lead.query.filter_by(email=r["email"])
+                                    .order_by(Lead.upload_date.desc()).first())
+                            camp = lead.campaign or ""
+                            qtr = lead.quarter or ""
+                            d["origin"] = f"DB: {camp}/{qtr}" if (camp or qtr) else "DB"
+                        else:
+                            d["origin"] = "Current Sheet"
                     else:
-                        d["origin"] = "Current Sheet"
+                        d["origin"] = ""
+                    rows.append(d)
+
+                dedupe_ctx = {
+                    "token": token,
+                    "rows": rows,
+                    "fields": [c for c in big.columns if c != "__src__"] + ["__src__"],
+                    "dup_set": dup_set,
+                    "count_all": len(rows),
+                    "count_dup": sum(1 for r in rows if r["duplicate"]),
+                    "sources": ", ".join(big["__src__"].unique())
+                }
+
+        # ---------- POST (all actions) ----------
+        if request.method == 'POST':
+            action = request.form.get('action', '')
+            admin_pass = request.form.get("admin_pass", "")
+
+            # <<< FIX 1 START >>>
+            # ===== [FIXED] Update Selected Leads =====
+            if action == "update_selected":
+                if admin_pass != current_app.config['ADMIN_ACTION_PASSWORD']:
+                    flash("Invalid Admin Password.", "danger")
+                    return redirect(url_for("tools", tab="viewdb"))
+
+                selected_ids = request.form.getlist('lead_ids')
+                if not selected_ids:
+                    flash('No leads were selected to update.', 'warning')
+                    return redirect(url_for("tools", tab="viewdb"))
+
+                updated_count = 0
+                for lead_id in selected_ids:
+                    lead = db.session.get(Lead, int(lead_id))
+                    if lead:
+                        # Update lead attributes from form data
+                        lead.email = request.form.get(f"email_{lead_id}", lead.email)
+                        lead.company = request.form.get(f"company_{lead_id}", lead.company)
+                        lead.campaign = request.form.get(f"campaign_{lead_id}", lead.campaign)
+                        lead.quarter = request.form.get(f"quarter_{lead_id}", lead.quarter)
+                        updated_count += 1
+                
+                if updated_count > 0:
+                    db.session.commit()
+                    flash(f"Successfully updated {updated_count} lead(s).", "success")
+                
+                return redirect(url_for("tools", tab="viewdb"))
+            # <<< FIX 1 END >>>
+            
+            elif action == "delete_selected":
+                if admin_pass != current_app.config['ADMIN_ACTION_PASSWORD']:
+                    flash("Invalid Admin Password.", "danger")
+                    return redirect(url_for("tools", tab="viewdb"))
+                
+                selected_ids = request.form.getlist('lead_ids')
+                if not selected_ids:
+                    flash('No leads were selected to delete.', 'warning')
+                    return redirect(url_for("tools", tab="viewdb"))
+
+                Lead.query.filter(Lead.id.in_(selected_ids)).delete(synchronize_session=False)
+                db.session.commit()
+                flash(f"{len(selected_ids)} lead(s) have been deleted.", "success")
+                return redirect(url_for("tools", tab="viewdb"))
+
+            elif action == "delete_source_results":
+                if admin_pass != current_app.config['ADMIN_ACTION_PASSWORD']:
+                    flash("Invalid Admin Password.", "danger")
+                    return redirect(url_for("tools", tab="viewdb"))
+
+                src = request.form.get("source_to_delete", "")
+                if not src:
+                    flash("Source name not found.", "warning")
                 else:
-                    d["origin"] = ""
-                rows.append(d)
-
-            dedupe_ctx = {
-                "token": token,
-                "rows": rows,
-                "fields": [c for c in big.columns if c != "__src__"] + ["__src__"],
-                "dup_set": dup_set,
-                "count_all": len(rows),
-                "count_dup": sum(1 for r in rows if r["duplicate"]),
-                "sources": ", ".join(big["__src__"].unique())
-            }
-
-    # ---------- POST (all actions) ----------
-    if request.method == 'POST':
-        action = request.form.get('action', '')
-
-        # ===== Edit one (password required) =====
-        if action == "update_lead":
-            if request.form.get("admin_pass", "") != current_app.config['ADMIN_ACTION_PASSWORD']:
-                flash("Wrong password for edit.", "danger")
+                    deleted = Lead.query.filter(Lead.source_file == src).delete(synchronize_session=False)
+                    db.session.commit()
+                    flash(f"Deleted {deleted} lead(s) from source '{src}'", "success")
                 return redirect(url_for("tools", tab="viewdb"))
 
-            lead_id = int(request.form.get("lead_id", "0") or 0)
-            lead = db.session.get(Lead, lead_id)
-            if not lead:
-                flash("Lead not found", "warning")
-                return redirect(url_for("tools", tab="viewdb"))
+            # <<< FIX 2 START >>>
+            # ===== [FIXED] Download Actions =====
+            elif action in ['download_selected', 'download_all', 'download_filtered']:
+                try:
+                    query = Lead.query
+                    filename = "leads.xlsx"
 
-            lead.email       = (request.form.get("email", lead.email) or "").strip().lower()
-            lead.company     = request.form.get("company", "") or ""
-            lead.quarter     = request.form.get("quarter", "") or ""
-            lead.campaign    = request.form.get("campaign", "") or ""
-            lead.source_file = request.form.get("source_file", "") or ""
-            lead.exclusions  = request.form.get("exclusions", "") or ""
-            db.session.commit()
-            flash("Lead updated", "success")
-            active_tab = "viewdb"
+                    if action == 'download_all':
+                        filename = "all_leads.xlsx"
+                    
+                    elif action == 'download_selected':
+                        selected_ids = request.form.getlist('lead_ids')
+                        if not selected_ids:
+                            flash('No leads selected to download.', 'warning')
+                            return redirect(url_for('tools', tab='viewdb'))
+                        query = query.filter(Lead.id.in_(selected_ids))
+                        filename = "selected_leads.xlsx"
 
-        # ===== Delete one (password required) =====
-        elif action == "delete_lead":
-            if request.form.get("admin_pass", "") != current_app.config['ADMIN_ACTION_PASSWORD']:
-                flash("Wrong password for delete.", "danger")
-                return redirect(url_for("tools", tab="viewdb"))
+                    elif action == 'download_filtered':
+                        # FIX: Read filter criteria from request.form, not request.args
+                        if request.form.get('enable_email') and request.form.get('filter_email'):
+                            query = query.filter(Lead.email.ilike(f"%{request.form.get('filter_email')}%"))
+                        if request.form.get('enable_campaign') and request.form.get('filter_campaign'):
+                            query = query.filter(Lead.campaign.ilike(f"%{request.form.get('filter_campaign')}%"))
+                        if request.form.get('enable_company') and request.form.get('filter_company'):
+                            query = query.filter(Lead.company.ilike(f"%{request.form.get('filter_company')}%"))
+                        if request.form.get('enable_source') and request.form.get('filter_source'):
+                            query = query.filter(Lead.source_file.ilike(f"%{request.form.get('filter_source')}%"))
+                        filename = "filtered_leads.xlsx"
+                    
+                    leads_data = [
+                        {c.name: getattr(lead, c.name) for c in lead.__table__.columns}
+                        for lead in query.order_by(Lead.upload_date.desc()).all()
+                    ]
 
-            lead_id = int(request.form.get("lead_id", "0") or 0)
-            lead = db.session.get(Lead, lead_id)
-            if not lead:
-                flash("Lead not found", "warning")
-            else:
-                db.session.delete(lead)
-                db.session.commit()
-                flash("Lead deleted", "success")
-            active_tab = "viewdb"
+                    if not leads_data:
+                        flash('No data found to download for the given criteria.', 'warning')
+                        return redirect(url_for('tools', tab='viewdb'))
 
-        # ===== Delete all by source (password required) =====
-        elif action == "delete_source":
-            if request.form.get("admin_pass", "") != current_app.config['ADMIN_ACTION_PASSWORD']:
-                flash("Wrong password for delete.", "danger")
-                return redirect(url_for("tools", tab="viewdb"))
+                    df = pd.DataFrame(leads_data)
+                    output = io.BytesIO()
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        df.to_excel(writer, index=False, sheet_name='Leads')
+                    output.seek(0)
+                    
+                    return send_file(
+                        output,
+                        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        as_attachment=True,
+                        download_name=filename
+                    )
+                except ImportError:
+                    flash("Error: The 'pandas' or 'openpyxl' library is not installed. Please run 'pip install pandas openpyxl' in your terminal.", "danger")
+                    return redirect(url_for('tools', tab='viewdb'))
+                except Exception as e:
+                    flash(f"An unexpected error occurred during download: {e}", "danger")
+                    return redirect(url_for('tools', tab='viewdb'))
+            # <<< FIX 2 END >>>
 
-            src = request.form.get("source_name", "")
-            if not src:
-                flash("Select a source to delete", "warning")
-            else:
-                deleted = (Lead.query.filter(Lead.source_file == src)
-                           .delete(synchronize_session=False))
-                db.session.commit()
-                flash(f"Deleted {deleted} lead(s) from '{src}'", "success")
-            active_tab = "viewdb"
+            # ===== Dedupe upload =====
+            elif action == "dedupe":
+                files = request.files.getlist("file_upload")
+                if not files or not files[0].filename:
+                    flash("Select at least one Excel file", "warning")
+                    return redirect(url_for("tools", tab="duplicate"))
 
-        # ===== Dedupe upload =====
-        elif action == "dedupe":
-            files = request.files.getlist("file_upload")
-            if not files or not files[0].filename:
-                flash("Select at least one Excel file", "warning")
-                return redirect(url_for("tools", tab="duplicate"))
+                token = uuid.uuid4().hex
+                dfs, srcs = [], []
+                for f in files:
+                    if not allowed_file(f.filename):
+                        flash(f"Unsupported file type: {f.filename}", "warning")
+                        continue
+                    fn = secure_filename(f.filename)
+                    path = Path(current_app.config['UPLOAD_FOLDER']) / f"{token}_{fn}"
+                    f.save(path)
 
-            token = uuid.uuid4().hex
-            dfs, srcs = [], []
-            for f in files:
-                if not allowed_file(f.filename):
-                    flash(f"Unsupported file type: {f.filename}", "warning")
-                    continue
-                fn = secure_filename(f.filename)
-                path = Path(current_app.config['UPLOAD_FOLDER']) / f"{token}_{fn}"
-                f.save(path)
+                    df = pd.read_excel(path, engine="openpyxl")
+                    col = find_email_col(df.columns)
+                    df = df.rename(columns={col: "Email"})
+                    df["Email"] = df["Email"].map(lambda s: str(s).strip().lower())
+                    df["__src__"] = fn
 
-                df = pd.read_excel(path, engine="openpyxl")
-                col = find_email_col(df.columns)
-                df = df.rename(columns={col: "Email"})
-                df["Email"] = df["Email"].map(lambda s: str(s).strip().lower())
-                df["__src__"] = fn
+                    df.columns = [str(c).strip().lower() for c in df.columns]
+                    if "campaign name" in df.columns:
+                        df.rename(columns={"campaign name": "campaign"}, inplace=True)
+                    if "exclusions" not in df.columns:
+                        df["exclusions"] = ""
+                    dfs.append(df)
+                    srcs.append(fn)
 
-                df.columns = [str(c).strip().lower() for c in df.columns]
+                if not dfs:
+                    flash("No valid Excel files uploaded", "warning")
+                    return redirect(url_for("tools", tab="duplicate"))
+
+                big = pd.concat(dfs, ignore_index=True)
+                mask_dup = big.duplicated("email", keep=False)
+                existing = {e for (e,) in db.session.query(Lead.email)
+                            .filter(Lead.email.in_(big["email"])).all()}
+                dup_set = set(big.loc[mask_dup, "email"]) | existing
+
+                rows = []
+                for _, r in big.iterrows():
+                    d = r.to_dict()
+                    is_dup = r["email"] in dup_set
+                    d["duplicate"] = is_dup
+                    if is_dup:
+                        if r["email"] in existing:
+                            lead = (Lead.query.filter_by(email=r["email"])
+                                    .order_by(Lead.upload_date.desc()).first())
+                            camp = lead.campaign or ""
+                            qtr = lead.quarter or ""
+                            d["origin"] = f"DB: {camp}/{qtr}" if (camp or qtr) else "DB"
+                        else:
+                            d["origin"] = "Current Sheet"
+                    else:
+                        d["origin"] = ""
+                    rows.append(d)
+
+                cache_path = Path(current_app.config['UPLOAD_FOLDER']) / f"_cache_{token}.parquet"
+                big.to_parquet(cache_path)
+
+                dedupe_ctx = {
+                    "token": token,
+                    "rows": rows,
+                    "fields": [c for c in big.columns if c != "__src__"] + ["__src__"],
+                    "dup_set": dup_set,
+                    "count_all": len(rows),
+                    "count_dup": sum(1 for r in rows if r["duplicate"]),
+                    "sources": ", ".join(srcs)
+                }
+
+            # ===== Save (all or duplicates) =====
+            elif action in ("save_all", "save_dup"):
+                token = request.form.get("token", "")
+                cache_path = Path(current_app.config['UPLOAD_FOLDER']) / f"_cache_{token}.parquet"
+                if not cache_path.exists():
+                    flash("No data to save; re-run check first", "warning")
+                    return redirect(url_for("tools", tab="duplicate"))
+
+                df = pd.read_parquet(cache_path)
+                df.columns = [c.lower() for c in df.columns]
                 if "campaign name" in df.columns:
                     df.rename(columns={"campaign name": "campaign"}, inplace=True)
                 if "exclusions" not in df.columns:
                     df["exclusions"] = ""
-                dfs.append(df)
-                srcs.append(fn)
 
-            if not dfs:
-                flash("No valid Excel files uploaded", "warning")
+                existing = {e for (e,) in db.session.query(Lead.email)
+                            .filter(Lead.email.in_(df["email"])).all()}
+                mask_dup = df.duplicated("email", keep=False)
+                dup_set = set(df.loc[mask_dup, "email"]) | existing
+
+                saved = 0
+                for _, r in df.iterrows():
+                    email = r["email"]
+                    do = (action == "save_all") or (email in dup_set)
+                    if not do:
+                        continue
+                    lead = Lead(
+                        email=email,
+                        company=r.get("company", ""),
+                        quarter=r.get("quarter", ""),
+                        campaign=r.get("campaign", ""),
+                        source_file=r.get("__src__", ""),
+                        exclusions=r.get("exclusions", "")
+                    )
+                    db.session.add(lead)
+                    saved += 1
+
+                db.session.commit()
+                flash(f"{saved} rows saved", "success")
                 return redirect(url_for("tools", tab="duplicate"))
 
-            big = pd.concat(dfs, ignore_index=True)
-            mask_dup = big.duplicated("email", keep=False)
-            existing = {e for (e,) in db.session.query(Lead.email)
-                        .filter(Lead.email.in_(big["email"])).all()}
-            dup_set = set(big.loc[mask_dup, "email"]) | existing
+            # ===== Exact email search =====
+            elif action == "search":
+                q = (request.form.get("search_email", "") or "").strip().lower()
+                search_results = Lead.query.filter_by(email=q).all()
+                if not search_results:
+                    flash("No matches found", "info")
+                active_tab = "search"
 
-            rows = []
-            for _, r in big.iterrows():
-                d = r.to_dict()
-                is_dup = r["email"] in dup_set
-                d["duplicate"] = is_dup
-                if is_dup:
-                    if r["email"] in existing:
-                        lead = (Lead.query.filter_by(email=r["email"])
-                                .order_by(Lead.upload_date.desc()).first())
-                        camp = lead.campaign or ""
-                        qtr = lead.quarter or ""
-                        d["origin"] = f"DB: {camp}/{qtr}" if (camp or qtr) else "DB"
-                    else:
-                        d["origin"] = "Current Sheet"
-                else:
-                    d["origin"] = ""
-                rows.append(d)
+            # ===== Merge files =====
+            elif action == "merge":
+                files = request.files.getlist("file_merge")
+                if not files or not files[0].filename:
+                    flash("Select at least one Excel file", "warning")
+                    return redirect(url_for("tools", tab="merge"))
 
-            cache_path = Path(current_app.config['UPLOAD_FOLDER']) / f"_cache_{token}.parquet"
-            big.to_parquet(cache_path)
+                dfs, hdrs = [], set()
+                for f in files:
+                    if not allowed_file(f.filename):
+                        flash(f"Unsupported file type: {f.filename}", "warning")
+                        continue
+                    df = pd.read_excel(f, engine="openpyxl")
+                    dfs.append(df)
+                    hdrs |= set(df.columns)
 
-            dedupe_ctx = {
-                "token": token,
-                "rows": rows,
-                "fields": [c for c in big.columns if c != "__src__"] + ["__src__"],
-                "dup_set": dup_set,
-                "count_all": len(rows),
-                "count_dup": sum(1 for r in rows if r["duplicate"]),
-                "sources": ", ".join(srcs)
-            }
+                if not dfs:
+                    flash("No valid Excel files uploaded", "warning")
+                    return redirect(url_for("tools", tab="merge"))
 
-        # ===== Save (all or duplicates) =====
-        elif action in ("save_all", "save_dup"):
-            token = request.form.get("token", "")
-            cache_path = Path(current_app.config['UPLOAD_FOLDER']) / f"_cache_{token}.parquet"
-            if not cache_path.exists():
-                flash("No data to save; re-run check first", "warning")
-                return redirect(url_for("tools", tab="duplicate"))
+                hdrs = sorted(hdrs)
+                merged = pd.concat([df.reindex(columns=hdrs, fill_value="") for df in dfs],
+                                   ignore_index=True)
 
-            df = pd.read_parquet(cache_path)
-            df.columns = [c.lower() for c in df.columns]
-            if "campaign name" in df.columns:
-                df.rename(columns={"campaign name": "campaign"}, inplace=True)
-            if "exclusions" not in df.columns:
-                df["exclusions"] = ""
+                token = uuid.uuid4().hex
+                out_fn = f"merged_{token}.xlsx"
+                merged.to_excel(Path(current_app.config['UPLOAD_FOLDER']) / out_fn,
+                                index=False, engine="openpyxl")
 
-            existing = {e for (e,) in db.session.query(Lead.email)
-                        .filter(Lead.email.in_(df["email"])).all()}
-            mask_dup = df.duplicated("email", keep=False)
-            dup_set = set(df.loc[mask_dup, "email"]) | existing
+                merge_ctx = {
+                    "headers": hdrs,
+                    "records": merged.to_dict("records"),
+                    "download": out_fn
+                }
+                active_tab = "merge"
 
-            saved = 0
-            for _, r in df.iterrows():
-                email = r["email"]
-                do = (action == "save_all") or (email in dup_set)
-                if not do:
-                    continue
-                lead = Lead(
-                    email=email,
-                    company=r.get("company", ""),
-                    quarter=r.get("quarter", ""),
-                    campaign=r.get("campaign", ""),
-                    source_file=r.get("__src__", ""),
-                    exclusions=r.get("exclusions", "")
-                )
-                db.session.add(lead)
-                saved += 1
 
-            db.session.commit()
-            flash(f"{saved} rows saved", "success")
-            return redirect(url_for("tools", tab="duplicate"))
-
-        # ===== Exact email search =====
-        elif action == "search":
-            q = (request.form.get("search_email", "") or "").strip().lower()
-            search_results = Lead.query.filter_by(email=q).all()
-            if not search_results:
-                flash("No matches found", "info")
-            active_tab = "search"
-
-        # ===== Merge files =====
-        elif action == "merge":
-            files = request.files.getlist("file_merge")
-            if not files or not files[0].filename:
-                flash("Select at least one Excel file", "warning")
-                return redirect(url_for("tools", tab="merge"))
-
-            dfs, hdrs = [], set()
-            for f in files:
-                if not allowed_file(f.filename):
-                    flash(f"Unsupported file type: {f.filename}", "warning")
-                    continue
-                df = pd.read_excel(f, engine="openpyxl")
-                dfs.append(df)
-                hdrs |= set(df.columns)
-
-            if not dfs:
-                flash("No valid Excel files uploaded", "warning")
-                return redirect(url_for("tools", tab="merge"))
-
-            hdrs = sorted(hdrs)
-            merged = pd.concat([df.reindex(columns=hdrs, fill_value="") for df in dfs],
-                               ignore_index=True)
-
-            token = uuid.uuid4().hex
-            out_fn = f"merged_{token}.xlsx"
-            merged.to_excel(Path(current_app.config['UPLOAD_FOLDER']) / out_fn,
-                            index=False, engine="openpyxl")
-
-            merge_ctx = {
-                "headers": hdrs,
-                "records": merged.to_dict("records"),
-                "download": out_fn
-            }
-            active_tab = "merge"
-
-    # ---------- View Leads + filters ----------
-    if active_tab == 'viewdb':
-        enable_email    = request.values.get('enable_email') == '1'
-        enable_campaign = request.values.get('enable_campaign') == '1'
-        enable_company  = request.values.get('enable_company') == '1'
-        enable_source   = request.values.get('enable_source') == '1'
-
-        def norm(s): return str(s).strip().lower()
-
-        email_q    = norm(request.values.get('filter_email', ''))    if enable_email    else ''
-        campaign_q = norm(request.values.get('filter_campaign', '')) if enable_campaign else ''
-        company_q  = norm(request.values.get('filter_company', ''))  if enable_company  else ''
-        source_q   = norm(request.values.get('filter_source', ''))   if enable_source   else ''
-
-        query = Lead.query
-        if enable_email and email_q:
-            query = query.filter(Lead.email.ilike(f"%{email_q}%"))
-        if enable_campaign and campaign_q:
-            query = query.filter(Lead.campaign.ilike(f"%{campaign_q}%"))
-        if enable_company and company_q:
-            query = query.filter(Lead.company.ilike(f"%{company_q}%"))
-        if enable_source and source_q:
-            query = query.filter(Lead.source_file.ilike(f"%{source_q}%"))
-
-        all_db_leads = query.order_by(Lead.upload_date.desc()).all()
-    else:
-        all_db_leads = Lead.query.order_by(Lead.upload_date.desc()).all()
-
-    # Build the dropdown choices for "Delete by Source"
-    source_options = [
-        s for (s,) in db.session.query(Lead.source_file)
-            .filter(Lead.source_file.isnot(None), Lead.source_file != '')
-            .distinct()
-            .order_by(Lead.source_file.asc())
-            .all()
-    ]
-
-    return render_template(
-        "tools.html",
-        active_tab=active_tab,
-        dedupe=dedupe_ctx,
-        search_results=search_results,
-        merge=merge_ctx,
-        viewdb=all_db_leads,
-        source_options=source_options,
-    )
-
+        # ---------- View Leads + filters (for GET request) ----------
+        viewdb_leads = []
+        if active_tab == 'viewdb':
+            query = Lead.query
+            # This part is for GET requests to display the filtered list correctly
+            if request.args.get('enable_email') and request.args.get('filter_email'):
+                query = query.filter(Lead.email.ilike(f"%{request.args.get('filter_email')}%"))
+            if request.args.get('enable_campaign') and request.args.get('filter_campaign'):
+                query = query.filter(Lead.campaign.ilike(f"%{request.args.get('filter_campaign')}%"))
+            if request.args.get('enable_company') and request.args.get('filter_company'):
+                query = query.filter(Lead.company.ilike(f"%{request.args.get('filter_company')}%"))
+            if request.args.get('enable_source') and request.args.get('filter_source'):
+                query = query.filter(Lead.source_file.ilike(f"%{request.args.get('filter_source')}%"))
+            
+            viewdb_leads = query.order_by(Lead.upload_date.desc()).all()
+        
+        return render_template(
+            "tools.html",
+            active_tab=active_tab,
+            dedupe=dedupe_ctx,
+            search_results=search_results,
+            merge=merge_ctx,
+            viewdb=viewdb_leads,
+        )
 
     @app.route("/uploads/<path:filename>")
     @login_required
@@ -447,5 +492,5 @@ if __name__ == "__main__":
     application.run(
         host="0.0.0.0",
         port=int(os.getenv("PORT", 5000)),
-        debug=False
+        debug=True # Set to True during development for better error messages
     )
