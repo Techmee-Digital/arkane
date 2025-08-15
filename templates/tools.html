@@ -88,6 +88,7 @@
       </script>
     {% endif %}
   {% endif %}
+
   {% if active_tab=='search' %}
     <form method="post" class="mb-3">
       <input type="hidden" name="action" value="search">
@@ -121,6 +122,7 @@
     </div>
     {% endif %}
   {% endif %}
+
   {% if active_tab=='merge' %}
     <form method="post" enctype="multipart/form-data" class="mb-3 row g-2 align-items-end">
       <input type="hidden" name="action" value="merge">
@@ -154,24 +156,56 @@
   {% endif %}
 
   {% if active_tab=='viewdb' %}
-  
+  <!-- Filters -->
   <form method="GET" class="mb-3 p-3 bg-secondary rounded">
     <input type="hidden" name="tab" value="viewdb">
     <div class="row g-3 align-items-center">
-        <div class="col-auto fw-bold">Filters:</div>
-        <div class="col-auto"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="chkEmail" name="enable_email" value="1" {% if request.values.enable_email %}checked{% endif %}> <label class="form-check-label" for="chkEmail">Email</label></div></div>
-        <div class="col-auto"><input type="text" name="filter_email" value="{{ request.values.filter_email or '' }}" class="form-control form-control-dark bg-dark text-light border-light" placeholder="Email contains..."></div>
-        <div class="col-auto"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="chkCampaign" name="enable_campaign" value="1" {% if request.values.enable_campaign %}checked{% endif %}> <label class="form-check-label" for="chkCampaign">Campaign</label></div></div>
-        <div class="col-auto"><input type="text" name="filter_campaign" value="{{ request.values.filter_campaign or '' }}" class="form-control form-control-dark bg-dark text-light border-light" placeholder="Campaign contains..."></div>
-        <div class="col-auto"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="chkCompany" name="enable_company" value="1" {% if request.values.enable_company %}checked{% endif %}> <label class="form-check-label" for="chkCompany">Company</label></div></div>
-        <div class="col-auto"><input type="text" name="filter_company" value="{{ request.values.filter_company or '' }}" class="form-control form-control-dark bg-dark text-light border-light" placeholder="Company contains..."></div>
-        <div class="col-auto"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="chkSource" name="enable_source" value="1" {% if request.values.enable_source %}checked{% endif %}> <label class="form-check-label" for="chkSource">Source</label></div></div>
-        <div class="col-auto"><input type="text" name="filter_source" value="{{ request.values.filter_source or '' }}" class="form-control form-control-dark bg-dark text-light border-light" placeholder="Source contains..."></div>
-        
-        <div class="col-auto">
-            <button type="submit" class="btn btn-primary">Apply Filters</button>
-            <a href="{{ url_for('tools', tab='viewdb') }}" class="btn btn-dark">Clear Filters</a>
+      <div class="col-auto fw-bold">Filters:</div>
+
+      <div class="col-auto">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="chkEmail" name="enable_email" value="1" {% if request.values.enable_email %}checked{% endif %}>
+          <label class="form-check-label" for="chkEmail">Email</label>
         </div>
+      </div>
+      <div class="col-auto">
+        <input type="text" name="filter_email" value="{{ request.values.filter_email or '' }}" class="form-control form-control-dark bg-dark text-light border-light" placeholder="Email contains...">
+      </div>
+
+      <div class="col-auto">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="chkCampaign" name="enable_campaign" value="1" {% if request.values.enable_campaign %}checked{% endif %}>
+          <label class="form-check-label" for="chkCampaign">Campaign</label>
+        </div>
+      </div>
+      <div class="col-auto">
+        <input type="text" name="filter_campaign" value="{{ request.values.filter_campaign or '' }}" class="form-control form-control-dark bg-dark text-light border-light" placeholder="Campaign contains...">
+      </div>
+
+      <div class="col-auto">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="chkCompany" name="enable_company" value="1" {% if request.values.enable_company %}checked{% endif %}>
+          <label class="form-check-label" for="chkCompany">Company</label>
+        </div>
+      </div>
+      <div class="col-auto">
+        <input type="text" name="filter_company" value="{{ request.values.filter_company or '' }}" class="form-control form-control-dark bg-dark text-light border-light" placeholder="Company contains...">
+      </div>
+
+      <div class="col-auto">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="chkSource" name="enable_source" value="1" {% if request.values.enable_source %}checked{% endif %}>
+          <label class="form-check-label" for="chkSource">Source</label>
+        </div>
+      </div>
+      <div class="col-auto">
+        <input type="text" name="filter_source" value="{{ request.values.filter_source or '' }}" class="form-control form-control-dark bg-dark text-light border-light" placeholder="Source contains...">
+      </div>
+
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary">Apply Filters</button>
+        <a href="{{ url_for('tools', tab='viewdb') }}" class="btn btn-dark">Clear Filters</a>
+      </div>
     </div>
   </form>
 
@@ -188,45 +222,48 @@
     <input type="hidden" name="enable_source" value="{% if request.values.enable_source %}1{% endif %}">
     <input type="hidden" name="filter_source" value="{{ request.values.filter_source or '' }}">
 
-
     <div class="d-flex align-items-center flex-wrap gap-2 p-3 mb-3 bg-secondary rounded">
-        <span class="fw-bold text-light">With Selected:</span>
-        <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#passwordModal" data-action="update_selected">Edit</button>
-        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#passwordModal" data-action="delete_selected">Delete</button>
-        <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#passwordModal" data-action="download_selected">Download</button>
+      <span class="fw-bold text-light">With Selected:</span>
+      <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#passwordModal" data-action="update_selected">Edit</button>
+      <button type="button" class="btn btn-danger"  data-bs-toggle="modal" data-bs-target="#passwordModal" data-action="delete_selected">Delete</button>
 
-        <div class="vr mx-2"></div>
-        <span class="fw-bold text-light">Bulk Download:</span>
-        <button type="submit" name="action" value="download_all" class="btn btn-info">Download All</button>
-        <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#passwordModal" data-action="download_filtered">Download Filtered</button>
-        
-        <button type="submit" id="saveBtn" class="btn btn-success" style="display:none;">Save Changes</button>
-        <button type="button" id="cancelBtn" class="btn btn-dark" style="display:none;">Cancel</button>
+      <button type="button" class="btn btn-info" id="btnDownloadSelected">Download</button>
 
-        {% if request.values.get('enable_source') and request.values.filter_source %}
-        <div class="vr mx-2"></div>
-        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#passwordModal" data-action="delete_source_results">Delete All From Source '{{ request.values.filter_source }}'</button>
-        <input type="hidden" name="source_to_delete" value="{{ request.values.filter_source }}">
-        {% endif %}
+      <div class="vr mx-2"></div>
+      <span class="fw-bold text-light">Bulk Download:</span>
+      <button type="button" class="btn btn-info" id="btnDownloadAll">Download All</button>
+      <button type="button" class="btn btn-info" id="btnDownloadFiltered">Download Filtered</button>
+
+      <button type="submit" id="saveBtn" class="btn btn-success" style="display:none;">Save Changes</button>
+      <button type="button" id="cancelBtn" class="btn btn-dark" style="display:none;">Cancel</button>
+
+      {% if request.values.get('enable_source') and request.values.filter_source %}
+      <div class="vr mx-2"></div>
+      <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#passwordModal" data-action="delete_source_results">
+        Delete All From Source '{{ request.values.filter_source }}'
+      </button>
+      <input type="hidden" name="source_to_delete" value="{{ request.values.filter_source }}">
+      {% endif %}
     </div>
 
     <div class="table-responsive">
       <table class="table table-dark table-striped table-hover">
         <thead class="table-secondary text-dark">
           <tr>
-            <th style="width: 3%;"><input type="checkbox" id="select_all"></th>
-            <th>Email</th><th>Company</th><th>Quarter</th><th>Campaign</th><th>Source File</th><th>Uploaded</th>
+            <th style="width: 3%;"><input type="checkbox" id="select_all" aria-label="Select all rows"></th>
+            <th>Email</th><th>Company</th><th>Quarter</th><th>Campaign</th><th>Source File</th><th>Exclusions</th><th>Uploaded</th>
           </tr>
         </thead>
         <tbody>
           {% for l in viewdb %}
           <tr data-lead-id="{{ l.id }}">
             <td><input type="checkbox" class="lead_checkbox" name="lead_ids" value="{{ l.id }}"></td>
-            <td><input name="email_{{ l.id }}" value="{{ l.email }}" readonly class="form-control-plaintext form-control-sm text-light lead-input"></td>
-            <td><input name="company_{{ l.id }}" value="{{ l.company or '' }}" readonly class="form-control-plaintext form-control-sm text-light lead-input"></td>
-            <td><input name="quarter_{{ l.id }}" value="{{ l.quarter or '' }}" readonly class="form-control-plaintext form-control-sm text-light lead-input"></td>
-            <td><input name="campaign_{{ l.id }}" value="{{ l.campaign or '' }}" readonly class="form-control-plaintext form-control-sm text-light lead-input"></td>
+            <td><input name="email_{{ l.id }}"       value="{{ l.email }}"         readonly class="form-control-plaintext form-control-sm text-light lead-input"></td>
+            <td><input name="company_{{ l.id }}"     value="{{ l.company or '' }}" readonly class="form-control-plaintext form-control-sm text-light lead-input"></td>
+            <td><input name="quarter_{{ l.id }}"     value="{{ l.quarter or '' }}" readonly class="form-control-plaintext form-control-sm text-light lead-input"></td>
+            <td><input name="campaign_{{ l.id }}"    value="{{ l.campaign or '' }}" readonly class="form-control-plaintext form-control-sm text-light lead-input"></td>
             <td><input name="source_file_{{ l.id }}" value="{{ l.source_file or '' }}" readonly class="form-control-plaintext form-control-sm text-light lead-input"></td>
+            <td><input name="exclusions_{{ l.id }}"  value="{{ l.exclusions or '' }}"  readonly class="form-control-plaintext form-control-sm text-light lead-input"></td>
             <td>{{ l.upload_date.strftime('%Y-%m-%d %H:%M') }}</td>
           </tr>
           {% endfor %}
@@ -255,87 +292,139 @@
   </div>
 
   <script>
-    const passwordModalEl = document.getElementById('passwordModal');
-    const leadsForm = document.getElementById('leadsForm');
-    let currentAction = '';
+  const passwordModalEl = document.getElementById('passwordModal');
+  const leadsForm        = document.getElementById('leadsForm');
+  const saveBtn          = document.getElementById('saveBtn');
+  const cancelBtn        = document.getElementById('cancelBtn');
+  const btnDownloadSel   = document.getElementById('btnDownloadSelected');
+  const btnDownloadAll   = document.getElementById('btnDownloadAll');
+  const btnDownloadFilt  = document.getElementById('btnDownloadFiltered');
+  let currentAction = '';
 
-    function getSelectedIds() {
-      return Array.from(document.querySelectorAll('.lead_checkbox:checked')).map(cb => cb.value);
+  function getSelectedIds() {
+    return Array.from(document.querySelectorAll('.lead_checkbox:checked')).map(cb => cb.value);
+  }
+  function disableAllRowInputs() {
+    document.querySelectorAll('.lead-input').forEach(inp => inp.disabled = true);
+  }
+
+  if (passwordModalEl) {
+    passwordModalEl.addEventListener('show.bs.modal', function (event) {
+      const button = event.relatedTarget;
+      currentAction = button.getAttribute('data-action');
+      document.getElementById('modal_password_input').value = '';
+
+      const needsSelection = ['update_selected', 'delete_selected'];
+      if (needsSelection.includes(currentAction) && getSelectedIds().length === 0) {
+        alert('Please select at least one lead first.');
+        event.preventDefault();
+        return;
+      }
+
+      const promptText = document.getElementById('modal-prompt-text');
+      if (currentAction === 'delete_selected') {
+        promptText.textContent = `Enter password to DELETE ${getSelectedIds().length} lead(s). This deletes all records for those email(s) across all sources.`;
+      } else if (currentAction === 'delete_source_results') {
+        const sourceName = (document.querySelector('input[name="source_to_delete"]') || {}).value || '';
+        promptText.textContent = `Enter password to DELETE ALL leads from source '${sourceName}'. This is permanent.`;
+      } else {
+        promptText.textContent = 'Please enter the admin password to proceed.';
+      }
+    });
+  }
+
+  function hardCloseModal() {
+    const modal = bootstrap.Modal.getOrCreateInstance(passwordModalEl);
+    modal.hide();
+    setTimeout(() => {
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('padding-right');
+      document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+    }, 150);
+  }
+
+  document.getElementById('confirmPasswordBtn')?.addEventListener('click', () => {
+    const pwd = document.getElementById('modal_password_input').value.trim();
+    if (!pwd) {
+      alert('Password cannot be empty.');
+      return;
     }
+    document.getElementById('admin_pass_hidden').value = pwd;
+    document.getElementById('action_hidden').value     = currentAction;
 
-    if(passwordModalEl) {
-        passwordModalEl.addEventListener('show.bs.modal', function (event) {
-            const button = event.relatedTarget;
-            currentAction = button.getAttribute('data-action');
-            document.getElementById('modal_password_input').value = '';
+    if (currentAction === 'update_selected') {
+      hardCloseModal();
 
-            const selectionRequiredActions = ['update_selected', 'delete_selected', 'download_selected'];
-            
-            if (selectionRequiredActions.includes(currentAction) && getSelectedIds().length === 0) {
-                alert('Please select at least one lead first.');
-                event.preventDefault();
-                return;
-            }
-
-            const promptText = document.getElementById('modal-prompt-text');
-            if (currentAction === 'delete_selected') {
-                promptText.textContent = `Enter password to DELETE ${getSelectedIds().length} lead(s). This cannot be undone.`;
-            } else if (currentAction === 'delete_source_results') {
-                const sourceName = document.querySelector('input[name="source_to_delete"]').value;
-                promptText.textContent = `Enter password to DELETE ALL leads from source '${sourceName}'. This is permanent.`
-            } else {
-                promptText.textContent = 'Please enter the admin password to proceed.';
-            }
+      const ids = getSelectedIds();
+      ids.forEach(id => {
+        document.querySelectorAll(`tr[data-lead-id='${id}'] .lead-input`).forEach(input => {
+          input.readOnly = false;
+          input.classList.remove('form-control-plaintext');
+          input.classList.add('form-control', 'bg-dark');
+          input.disabled = false; // ensure enabled for selected rows
         });
+      });
+
+      saveBtn.style.display   = 'inline-block';
+      cancelBtn.style.display = 'inline-block';
+      const firstEditable = document.querySelector(`tr[data-lead-id='${ids[0]}'] .lead-input`);
+      firstEditable?.focus();
+
+    } else {
+      disableAllRowInputs();
+      leadsForm.submit();
+    }
+  });
+
+  document.getElementById('select_all')?.addEventListener('change', function () {
+    document.querySelectorAll('.lead_checkbox').forEach(cb => { cb.checked = this.checked; });
+  });
+
+  cancelBtn?.addEventListener('click', () => {
+    window.location.reload();
+  });
+
+  saveBtn?.addEventListener('click', function (e) {
+    const ids = getSelectedIds();
+    if (!ids.length) {
+      e.preventDefault();
+      alert('Please select at least one lead to save changes.');
+      return;
     }
 
-    if(document.getElementById('confirmPasswordBtn')) {
-        document.getElementById('confirmPasswordBtn').addEventListener('click', () => {
-          const enteredPassword = document.getElementById('modal_password_input').value;
-          if (!enteredPassword) {
-              alert('Password cannot be empty.');
-              return;
-          }
-          
-          document.getElementById('admin_pass_hidden').value = enteredPassword;
-          document.getElementById('action_hidden').value = currentAction;
+    const selected = new Set(ids);
+    document.querySelectorAll('tbody tr[data-lead-id]').forEach(tr => {
+      const id = tr.getAttribute('data-lead-id');
+      tr.querySelectorAll('.lead-input').forEach(input => {
+        input.disabled = !selected.has(id);
+      });
+    });
 
-          const bsModal = bootstrap.Modal.getInstance(passwordModalEl);
+    document.getElementById('action_hidden').value = 'update_selected';
+    document.getElementById('leadsForm').submit();
+  });
 
-          if (currentAction === 'update_selected') {
-            getSelectedIds().forEach(id => {
-              document.querySelectorAll(`tr[data-lead-id='${id}'] .lead-input`).forEach(input => {
-                input.readOnly = false;
-                input.classList.remove('form-control-plaintext');
-                input.classList.add('form-control', 'bg-dark');
-              });
-            });
-            document.getElementById('saveBtn').style.display = 'inline-block';
-            document.getElementById('cancelBtn').style.display = 'inline-block';
-            bsModal.hide();
-          } else {
-            leadsForm.submit();
-          }
-        });
+  btnDownloadSel?.addEventListener('click', function () {
+    const ids = getSelectedIds();
+    if (!ids.length) {
+      alert('Please select at least one lead to download.');
+      return;
     }
-    
-    if(document.getElementById('select_all')) {
-        document.getElementById('select_all').addEventListener('change', function () {
-          document.querySelectorAll('.lead_checkbox').forEach(cb => { cb.checked = this.checked; });
-        });
-    }
+    disableAllRowInputs();
+    document.getElementById('action_hidden').value = 'download_selected';
+    leadsForm.submit();
+  });
 
-    if(document.getElementById('cancelBtn')) {
-        document.getElementById('cancelBtn').addEventListener('click', () => {
-          window.location.reload();
-        });
-    }
-
-    if(document.getElementById('saveBtn')) {
-        document.getElementById('saveBtn').addEventListener('click', function() {
-            document.getElementById('action_hidden').value = 'update_selected';
-        });
-    }
+  btnDownloadAll?.addEventListener('click', function () {
+    disableAllRowInputs();
+    document.getElementById('action_hidden').value = 'download_all';
+    leadsForm.submit();
+  });
+  btnDownloadFilt?.addEventListener('click', function () {
+    disableAllRowInputs();
+    document.getElementById('action_hidden').value = 'download_filtered';
+    leadsForm.submit();
+  });
   </script>
   {% endif %}
 

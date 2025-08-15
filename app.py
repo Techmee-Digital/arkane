@@ -2,8 +2,6 @@ import os
 import uuid
 import io
 from pathlib import Path
-from datetime import datetime
-from sqlalchemy import func
 import pandas as pd
 from flask import (
     Flask, render_template, request, flash,
@@ -47,14 +45,11 @@ def create_app():
     )
     app.config['ADMIN_ACTION_PASSWORD'] = os.getenv('ADMIN_ACTION_PASSWORD', 'Cricket12')
 
-    # ensure upload folder exists
     Path(app.config['UPLOAD_FOLDER']).mkdir(parents=True, exist_ok=True)
 
-    # ─── Initialize extensions ──────────────────────────────────────
     db.init_app(app)
     Migrate(app, db)
 
-    # ─── Login manager setup ─────────────────────────────────────────
     login_manager = LoginManager()
     login_manager.init_app(app)
     login_manager.login_view = 'login'
@@ -65,27 +60,25 @@ def create_app():
 
     def allowed_file(filename: str) -> bool:
         return (
-        '.' in filename
-        and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
-    )
-
-    def normalize(s):
-        return str(s).strip().lower()
+            '.' in filename
+            and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+        )
 
     def find_email_col(cols):
         for c in cols:
             if 'mail' in c.lower():
                 return c
-        raise KeyError(
-            "No column containing 'mail'; rename your email column.")
+        raise KeyError("No column containing 'mail'; rename your email column.")
 
     @app.errorhandler(413)
     def file_too_large(e):
         flash(
-            f"File too large (max {app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)} MB)", "danger")
-        return redirect(request.url)
+            f"Request too large. Tip: for actions use the buttons which now submit only the selected rows. "
+            f"(Max {app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)} MB).",
+            "danger"
+        )
+        return redirect(url_for('tools', tab='viewdb'))
 
-    # ─── Login routes ──────────────────────────────────────────────
     @app.route('/login', methods=['GET', 'POST'])
     def login():
         if current_user.is_authenticated:
@@ -106,20 +99,17 @@ def create_app():
         logout_user()
         return redirect(url_for('login'))
 
-   # ─── Main tool route ───────────────────────────────────────────
     @app.route('/', methods=['GET', 'POST'])
     @login_required
     def tools():
         active_tab = request.values.get('tab', 'duplicate')
         token = request.values.get('token', '')
 
-        # default contexts
         dedupe_ctx = {"token": "", "rows": [], "fields": [], "dup_set": set(),
                       "count_all": 0, "count_dup": 0, "sources": ""}
         search_results = None
         merge_ctx = {}
 
-        # ---------- GET (token refresh for Duplicate Checker) ----------
         if request.method == 'GET' and token:
             cache_path = Path(current_app.config['UPLOAD_FOLDER']) / f"_cache_{token}.parquet"
             if cache_path.exists():
@@ -160,56 +150,63 @@ def create_app():
                     "sources": ", ".join(big["__src__"].unique())
                 }
 
-        # ---------- POST (all actions) ----------
         if request.method == 'POST':
             action = request.form.get('action', '')
             admin_pass = request.form.get("admin_pass", "")
 
-            # <<< FIX 1 START >>>
-            # ===== [FIXED] Update Selected Leads =====
             if action == "update_selected":
                 if admin_pass != current_app.config['ADMIN_ACTION_PASSWORD']:
                     flash("Invalid Admin Password.", "danger")
                     return redirect(url_for("tools", tab="viewdb"))
 
-                selected_ids = request.form.getlist('lead_ids')
+                selected_ids = [int(x) for x in request.form.getlist('lead_ids')]
                 if not selected_ids:
                     flash('No leads were selected to update.', 'warning')
                     return redirect(url_for("tools", tab="viewdb"))
 
                 updated_count = 0
                 for lead_id in selected_ids:
-                    lead = db.session.get(Lead, int(lead_id))
-                    if lead:
-                        # Update lead attributes from form data
-                        lead.email = request.form.get(f"email_{lead_id}", lead.email)
-                        lead.company = request.form.get(f"company_{lead_id}", lead.company)
-                        lead.campaign = request.form.get(f"campaign_{lead_id}", lead.campaign)
-                        lead.quarter = request.form.get(f"quarter_{lead_id}", lead.quarter)
-                        updated_count += 1
-                
-                if updated_count > 0:
+                    lead = db.session.get(Lead, lead_id)
+                    if not lead:
+                        continue
+                    lead.email       = (request.form.get(f"email_{lead_id}", lead.email) or "").strip().lower()
+                    lead.company     = request.form.get(f"company_{lead_id}", lead.company) or ""
+                    lead.quarter     = request.form.get(f"quarter_{lead_id}", lead.quarter) or ""
+                    lead.campaign    = request.form.get(f"campaign_{lead_id}", lead.campaign) or ""
+                    # optional fields if present in form
+                    if f"source_file_{lead_id}" in request.form:
+                        lead.source_file = request.form.get(f"source_file_{lead_id}", lead.source_file) or ""
+                    if f"exclusions_{lead_id}" in request.form:
+                        lead.exclusions = request.form.get(f"exclusions_{lead_id}", lead.exclusions) or ""
+                    updated_count += 1
+
+                if updated_count:
                     db.session.commit()
                     flash(f"Successfully updated {updated_count} lead(s).", "success")
-                
+
                 return redirect(url_for("tools", tab="viewdb"))
-            # <<< FIX 1 END >>>
-            
+
             elif action == "delete_selected":
                 if admin_pass != current_app.config['ADMIN_ACTION_PASSWORD']:
                     flash("Invalid Admin Password.", "danger")
                     return redirect(url_for("tools", tab="viewdb"))
-                
-                selected_ids = request.form.getlist('lead_ids')
+
+                selected_ids = [int(x) for x in request.form.getlist('lead_ids')]
                 if not selected_ids:
                     flash('No leads were selected to delete.', 'warning')
                     return redirect(url_for("tools", tab="viewdb"))
 
-                Lead.query.filter(Lead.id.in_(selected_ids)).delete(synchronize_session=False)
+                emails = [e for (e,) in db.session.query(Lead.email).filter(Lead.id.in_(selected_ids)).distinct().all()]
+                if not emails:
+                    flash("Could not resolve emails for selected rows.", "warning")
+                    return redirect(url_for("tools", tab="viewdb"))
+
+                deleted = Lead.query.filter(Lead.email.in_(emails)).delete(synchronize_session=False)
                 db.session.commit()
-                flash(f"{len(selected_ids)} lead(s) have been deleted.", "success")
+                flash(f"Deleted {deleted} record(s) across all sources for the selected email(s).", "success")
                 return redirect(url_for("tools", tab="viewdb"))
 
+            # ===== Delete all from Source (when filtered by source) =====
             elif action == "delete_source_results":
                 if admin_pass != current_app.config['ADMIN_ACTION_PASSWORD']:
                     flash("Invalid Admin Password.", "danger")
@@ -224,8 +221,6 @@ def create_app():
                     flash(f"Deleted {deleted} lead(s) from source '{src}'", "success")
                 return redirect(url_for("tools", tab="viewdb"))
 
-            # <<< FIX 2 START >>>
-            # ===== [FIXED] Download Actions =====
             elif action in ['download_selected', 'download_all', 'download_filtered']:
                 try:
                     query = Lead.query
@@ -233,9 +228,9 @@ def create_app():
 
                     if action == 'download_all':
                         filename = "all_leads.xlsx"
-                    
+
                     elif action == 'download_selected':
-                        selected_ids = request.form.getlist('lead_ids')
+                        selected_ids = [int(x) for x in request.form.getlist('lead_ids')]
                         if not selected_ids:
                             flash('No leads selected to download.', 'warning')
                             return redirect(url_for('tools', tab='viewdb'))
@@ -243,7 +238,6 @@ def create_app():
                         filename = "selected_leads.xlsx"
 
                     elif action == 'download_filtered':
-                        # FIX: Read filter criteria from request.form, not request.args
                         if request.form.get('enable_email') and request.form.get('filter_email'):
                             query = query.filter(Lead.email.ilike(f"%{request.form.get('filter_email')}%"))
                         if request.form.get('enable_campaign') and request.form.get('filter_campaign'):
@@ -253,22 +247,22 @@ def create_app():
                         if request.form.get('enable_source') and request.form.get('filter_source'):
                             query = query.filter(Lead.source_file.ilike(f"%{request.form.get('filter_source')}%"))
                         filename = "filtered_leads.xlsx"
-                    
-                    leads_data = [
-                        {c.name: getattr(lead, c.name) for c in lead.__table__.columns}
-                        for lead in query.order_by(Lead.upload_date.desc()).all()
-                    ]
 
-                    if not leads_data:
+                    leads = query.order_by(Lead.upload_date.desc()).all()
+                    if not leads:
                         flash('No data found to download for the given criteria.', 'warning')
                         return redirect(url_for('tools', tab='viewdb'))
 
+                    leads_data = [
+                        {c.name: getattr(lead, c.name) for c in lead.__table__.columns}
+                        for lead in leads
+                    ]
                     df = pd.DataFrame(leads_data)
                     output = io.BytesIO()
                     with pd.ExcelWriter(output, engine='openpyxl') as writer:
                         df.to_excel(writer, index=False, sheet_name='Leads')
                     output.seek(0)
-                    
+
                     return send_file(
                         output,
                         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -276,14 +270,12 @@ def create_app():
                         download_name=filename
                     )
                 except ImportError:
-                    flash("Error: The 'pandas' or 'openpyxl' library is not installed. Please run 'pip install pandas openpyxl' in your terminal.", "danger")
+                    flash("Error: install dependencies: pip install pandas openpyxl", "danger")
                     return redirect(url_for('tools', tab='viewdb'))
                 except Exception as e:
-                    flash(f"An unexpected error occurred during download: {e}", "danger")
+                    flash(f"Unexpected error during download: {e}", "danger")
                     return redirect(url_for('tools', tab='viewdb'))
-            # <<< FIX 2 END >>>
 
-            # ===== Dedupe upload =====
             elif action == "dedupe":
                 files = request.files.getlist("file_upload")
                 if not files or not files[0].filename:
@@ -355,7 +347,6 @@ def create_app():
                     "sources": ", ".join(srcs)
                 }
 
-            # ===== Save (all or duplicates) =====
             elif action in ("save_all", "save_dup"):
                 token = request.form.get("token", "")
                 cache_path = Path(current_app.config['UPLOAD_FOLDER']) / f"_cache_{token}.parquet"
@@ -396,7 +387,6 @@ def create_app():
                 flash(f"{saved} rows saved", "success")
                 return redirect(url_for("tools", tab="duplicate"))
 
-            # ===== Exact email search =====
             elif action == "search":
                 q = (request.form.get("search_email", "") or "").strip().lower()
                 search_results = Lead.query.filter_by(email=q).all()
@@ -404,7 +394,6 @@ def create_app():
                     flash("No matches found", "info")
                 active_tab = "search"
 
-            # ===== Merge files =====
             elif action == "merge":
                 files = request.files.getlist("file_merge")
                 if not files or not files[0].filename:
@@ -440,12 +429,9 @@ def create_app():
                 }
                 active_tab = "merge"
 
-
-        # ---------- View Leads + filters (for GET request) ----------
         viewdb_leads = []
         if active_tab == 'viewdb':
             query = Lead.query
-            # This part is for GET requests to display the filtered list correctly
             if request.args.get('enable_email') and request.args.get('filter_email'):
                 query = query.filter(Lead.email.ilike(f"%{request.args.get('filter_email')}%"))
             if request.args.get('enable_campaign') and request.args.get('filter_campaign'):
@@ -454,9 +440,8 @@ def create_app():
                 query = query.filter(Lead.company.ilike(f"%{request.args.get('filter_company')}%"))
             if request.args.get('enable_source') and request.args.get('filter_source'):
                 query = query.filter(Lead.source_file.ilike(f"%{request.args.get('filter_source')}%"))
-            
             viewdb_leads = query.order_by(Lead.upload_date.desc()).all()
-        
+
         return render_template(
             "tools.html",
             active_tab=active_tab,
@@ -487,10 +472,11 @@ def create_app():
 
     return app
 
+
 if __name__ == "__main__":
     application = create_app()
     application.run(
         host="0.0.0.0",
         port=int(os.getenv("PORT", 5000)),
-        debug=True # Set to True during development for better error messages
+        debug=True
     )
