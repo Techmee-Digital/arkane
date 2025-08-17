@@ -1,70 +1,79 @@
 <!doctype html>
 <html lang="en">
-  <head>
+<head>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%2338bdf8'/><stop offset='1' stop-color='%238257e6'/></linearGradient></defs><g opacity='.22'><rect x='6' y='8' width='36' height='36' rx='10' ry='10' fill='%23000'/><rect x='22' y='24' width='36' height='36' rx='10' ry='10' fill='%23000'/></g><rect x='6' y='8' width='36' height='36' rx='10' ry='10' fill='none' stroke='url(%23g)' stroke-width='5'/><rect x='22' y='24' width='36' height='36' rx='10' ry='10' fill='none' stroke='url(%23g)' stroke-width='5'/></svg>">
+<meta name="theme-color" content="#0b0e12">
+
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Arkane</title>
-    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
 
-    <link rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/bootswatch@5/dist/cyborg/bootstrap.min.css">
+    <div class="sidebar">
+        <a href="{{ url_for('tools') }}" class="sidebar-header text-decoration-none">
+            <svg class="arkane-logo me-2" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            Arkane
+        </a>
 
-    <style>
-      body { overflow-x: hidden; }
-      .sidebar {
-        min-width: 200px;
-        max-width: 200px;
-        min-height: 100vh;
-        position: fixed;
-        background: #272d3b;
-      }
-      .sidebar .nav-link {
-        color: #bbb;
-      }
-      .sidebar .nav-link.active {
-        background-color: #1b2431;
-        color: #fff;
-      }
-      .sidebar .navbar-brand {
-        font-weight: bold;
-        font-size: 1.5rem;
-        color: #fff;
-        padding: 1rem;
-      }
-      .content {
-        margin-left: 200px;
-        padding: 1.5rem;
-      }
-    </style>
-  </head>
-  <body>
-
-    {% if current_user.is_authenticated %}
-      <nav class="sidebar nav flex-column p-3">
-        <a class="nav-link text-danger mt-auto"
-           href="{{ url_for('logout') }}">Logout</a>
-      </nav>
-    {% endif %}
-
-    <div class="{% if current_user.is_authenticated %}content{% else %}container{% endif %}">
-      {# --- THIS IS THE IMPROVED BLOCK FOR FLASH MESSAGES --- #}
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          <div class="container mt-3" style="position: absolute; top: 0; left: 220px; right: 20px; z-index: 1050;">
-            {% for category, message in messages %}
-              <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-              </div>
+        <ul class="nav flex-column sidebar-nav">
+            {% set nav_items = {
+                'duplicate': ('Duplicate Checker', '<polyline points="15 17 21 17 21 23 15 23 15 17"></polyline><path d="M11 17H5a2 2 0 0 1-2-2V7c0-1.1.9-2 2-2h12a2 2 0 0 1 2 2v2"></path>'),
+                'search': ('Search Email', '<circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>'),
+                'merge': ('Bulk Merge', '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>'),
+                'viewdb': ('View Leads', '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline>')
+            } %}
+            {% for tab_id, (title, icon_path) in nav_items.items() %}
+            <li class="nav-item">
+                <a class="nav-link {% if active_tab == tab_id %}active{% endif %}" href="{{ url_for('tools', tab=tab_id, token=dedupe.token) }}">
+                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        {{ icon_path|safe }}
+                    </svg>
+                    <span class="nav-text">{{ title }}</span>
+                </a>
+            </li>
             {% endfor %}
-          </div>
-        {% endif %}
-      {% endwith %}
-
-      {% block content %}{% endblock %}
+        </ul>
+        
+        <div class="sidebar-footer">
+            <a href="{{ url_for('logout') }}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-log-out nav-icon"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                Logout
+            </a>
+        </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <script src="{{ url_for('static', filename='custom.js') }}"></script>
-  </body>
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <div class="toast-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="toast align-items-center bg-{{ category }} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        {{ message }}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+            {% endfor %}
+        {% endif %}
+        {% endwith %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const toastElList = [].slice.call(document.querySelectorAll('.toast'));
+            const toastList = toastElList.map(function (toastEl) {
+                return new bootstrap.Toast(toastEl, { delay: 5000 }).show();
+            });
+        });
+    </script>
+</body>
 </html>

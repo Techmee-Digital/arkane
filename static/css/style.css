@@ -1,0 +1,408 @@
+/* --- Google Font --- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* --- CSS Variables --- */
+:root {
+    --bg-dark: #1a1c23;
+    --bg-light-glass: rgba(35, 37, 45, 0.7);
+    --border-color: rgba(58, 61, 74, 0.8);
+    --text-primary: #f8f8f2;
+    --text-secondary: #c6c6b4;
+    --primary-accent: #8257e6;
+    --primary-accent-hover: #9466ff;
+    --secondary-accent: #38bdf8;
+    --success: #50fa7b;
+    --warning: #f1fa8c;
+    --danger: #ff5555;
+    --font-family-sans-serif: 'Inter', sans-serif;
+
+    /* Duplicate checker theme */
+    --dup-header-bg: rgba(10, 12, 18, 0.65);
+    --dup-metrics-bg: rgba(0,0,0,0.50);
+    --dup-metrics-text: #ffffff;
+
+    --dup-row-bg: rgba(56, 189, 248, 0.06);       /* subtle cyan tint for normal rows */
+    --dup-row-hover-bg: rgba(56, 189, 248, 0.12);
+    --dup-duplicate-bg: rgba(245, 158, 11, 0.20); /* amber for duplicates */
+    --dup-duplicate-border: #f59e0b;
+    --dup-badge-bg: #f59e0b;
+    --dup-badge-ring: #fbbf24;
+}
+
+/* --- Base Styles & Scrollbar --- */
+html {
+    scroll-behavior: smooth;
+    overflow-x: hidden;              /* kill bottom scrollbar globally */
+}
+body {
+    background: #1a1a1a;
+    color: var(--text-primary);
+    font-family: var(--font-family-sans-serif);
+    display: flex;
+    overflow: hidden;                /* body fixed; main-content scrolls */
+}
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-dark); }
+::-webkit-scrollbar-thumb { background: var(--primary-accent); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--secondary-accent); }
+
+/* --- Background effects: behind & non-interactive --- */
+.lines,
+.stars,
+.shooting-star {
+    position: fixed !important;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 0 !important;           /* below UI/modals */
+    pointer-events: none;            /* never capture clicks or focus */
+    user-select: none;
+    overflow: hidden;
+}
+
+/* Remove the rain entirely */
+.lines { display: none !important; }
+
+/* --- (kept for completeness; not shown) Raining Lines rules --- */
+.line { position: relative; width: 1px; height: 100%; overflow: hidden; }
+.line::after { content: ''; display: block; position: absolute; height: 15vh; width: 100%; top: -50%; left: 0; background: linear-gradient(to bottom, rgba(255,255,255,0) 0%, #ffffff 75%, #ffffff 100%); animation: drop 7s 0s infinite; animation-fill-mode: forwards; animation-timing-function: cubic-bezier(0.4, 0.26, 0, 0.97); }
+@keyframes drop { 0% { top: -50%; } 100% { top: 110%; } }
+
+/* --- Starry background --- */
+.stars {
+    width: 1px;
+    height: 1px;
+    background: white;
+    box-shadow: 2vw 5vh 2px white, 10vw 8vh 2px white, 15vw 15vh 1px white, 22vw 22vh 1px white, 28vw 12vh 2px white, 32vw 32vh 1px white, 38vw 18vh 2px white, 42vw 35vh 1px white, 48vw 25vh 2px white, 53vw 42vh 1px white, 58vw 15vh 2px white, 63vw 38vh 1px white, 68vw 28vh 2px white, 73vw 45vh 1px white, 78vw 32vh 2px white, 83vw 48vh 1px white, 88vw 20vh 2px white, 93vw 52vh 1px white, 98vw 35vh 2px white, 5vw 60vh 1px white, 12vw 65vh 2px white, 18vw 72vh 1px white, 25vw 78vh 2px white, 30vw 85vh 1px white, 35vw 68vh 2px white, 40vw 82vh 1px white, 45vw 92vh 2px white, 50vw 75vh 1px white, 55vw 88vh 2px white, 60vw 95vh 1px white, 65vw 72vh 2px white, 70vw 85vh 1px white, 75vw 78vh 2px white, 80vw 92vh 1px white, 85vw 82vh 2px white, 90vw 88vh 1px white, 95vw 75vh 2px white;
+    animation: twinkle 8s infinite linear;
+}
+.shooting-star {
+    width: 100px;
+    height: 2px;
+    background: linear-gradient(90deg, white, transparent);
+    animation: shoot 3s infinite ease-in;
+}
+.shooting-star:nth-child(2) { top: 20%; left: -100px; animation-delay: 0s; }
+.shooting-star:nth-child(3) { top: 35%; left: -100px; animation-delay: 1s; }
+.shooting-star:nth-child(4) { top: 50%; left: -100px; animation-delay: 2s; }
+@keyframes twinkle { 0%, 100% { opacity: 0.8; } 50% { opacity: 0.4; } }
+@keyframes shoot { 0% { transform: translateX(0) translateY(0) rotate(25deg); opacity: 1; } 100% { transform: translateX(120vw) translateY(50vh) rotate(25deg); opacity: 0; } }
+
+/* --- Layout --- */
+.sidebar {
+    width: 260px;
+    background-color: rgba(26, 28, 35, 0.9);
+    border-right: 1px solid var(--border-color);
+    padding: 1.5rem;
+    position: fixed; top: 0; left: 0;
+    height: 100vh; display: flex; flex-direction: column;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    z-index: 10;
+}
+.main-content {
+    margin-left: 260px;
+    width: calc(100% - 260px);
+    height: 100vh;
+    padding: 2rem 2.5rem;
+    overflow-y: auto;
+    overflow-x: hidden;              /* no horizontal scroll inside main area */
+    z-index: 5;
+    position: relative;
+}
+.content-wrapper { position: relative; z-index: 5; }
+
+/* --- Card Animations --- */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+.card { opacity: 0; animation: fadeIn 0.6s forwards; }
+.card:nth-child(1) { animation-delay: 0.1s; }
+.card:nth-child(2) { animation-delay: 0.2s; }
+.card:nth-child(3) { animation-delay: 0.3s; }
+
+/* --- Sidebar & Holographic Effect --- */
+.sidebar-header { margin-bottom: 2rem; font-size: 1.5rem; font-weight: 700; color: var(--text-primary); transition: color 0.3s ease; }
+.sidebar-header .arkane-logo { transition: transform 0.4s ease-in-out; color: var(--primary-accent); }
+.sidebar-header:hover .arkane-logo { transform: rotate(360deg) scale(1.1); }
+.sidebar-nav .nav-link {
+    color: var(--text-secondary);
+    display: flex; align-items: center;
+    padding: 0.75rem 1rem; border-radius: 0.5rem;
+    margin-bottom: 0.5rem; font-weight: 500;
+    transition: all 0.3s ease;
+    position: relative; overflow: hidden;
+    background-color: transparent;
+}
+.sidebar-nav .nav-link .nav-icon, .sidebar-nav .nav-link .nav-text { z-index: 2; }
+.sidebar-nav .nav-link:before {
+    content: '';
+    position: absolute;
+    top: -50%; left: -120%;
+    width: 300%; height: 300%;
+    background: linear-gradient(115deg, transparent 40%, rgba(56, 189, 248, 0.3) 50%, transparent 60%);
+    transform: rotate(45deg);
+    transition: left 0.6s ease;
+}
+.sidebar-nav .nav-link:hover { color: #fff; }
+.sidebar-nav .nav-link:hover:before { left: -20%; }
+.sidebar-nav .nav-link.active { background-color: var(--primary-accent); color: #fff; }
+
+.sidebar-footer { margin-top: auto; }
+.sidebar-footer a { color: var(--text-secondary); text-decoration: none; transition: color 0.2s ease; }
+.sidebar-footer a:hover { color: var(--primary-accent); }
+
+/* --- Card Styles --- */
+.card { background-color: var(--bg-light-glass); border: 1px solid var(--border-color); border-radius: 0.75rem; margin-bottom: 1.5rem; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.card-header { padding: 1.25rem 1.5rem; background-color: rgba(0,0,0,0.2); border-bottom: 1px solid var(--border-color); font-size: 1.1rem; font-weight: 600; color: var(--text-primary); }
+.card-body { padding: 1.5rem; }
+
+/* --- Form Elements --- */
+.form-check-label { color: var(--text-secondary); }
+.form-control, .form-select { background-color: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 0.5rem; transition: border-color 0.2s, box-shadow 0.2s; }
+.form-control::placeholder { color: var(--text-secondary); opacity: 0.7; }
+.form-control:focus, .form-select:focus { background-color: rgba(0,0,0,0.3); color: var(--text-primary); border-color: var(--primary-accent); box-shadow: 0 0 0 0.25rem rgba(130, 87, 230, 0.25); }
+.form-control::file-selector-button { background-color: var(--bg-light-glass); border-color: var(--border-color); color: var(--text-primary); }
+
+/* --- General Button Styles --- */
+.btn { border-radius: 0.5rem; font-weight: 600; padding: 0.6rem 1.2rem; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; box-shadow: 0 2px 5px rgba(0,0,0,0.2); position: relative; overflow: hidden; }
+.btn.loading { transform: none; box-shadow: 0 2px 5px rgba(0,0,0,0.2); cursor: wait; }
+.btn .btn-text, .btn .spinner-border { transition: opacity 0.2s; }
+.btn.loading .btn-text { opacity: 0; }
+.btn .spinner-border { position: absolute; width: 1.2rem; height: 1.2rem; opacity: 0; }
+.btn.loading .spinner-border { opacity: 1; }
+
+/* --- Liquid Fill Button --- */
+.btn-liquid {
+    border: 2px solid var(--secondary-accent);
+    color: var(--secondary-accent);
+    background: none;
+    z-index: 1;
+    background: linear-gradient(var(--secondary-accent) 0 0) no-repeat calc(200% - var(--p,0%)) 100% / 200% var(--p, .2em);
+    transition: 0.3s var(--t, 0s), background-position .3s calc(.3s - var(--t, 0s));
+}
+.btn-liquid:hover { --p: 100%; --t: 0.3s; color: #111; }
+.btn-liquid.btn-danger { border-color: var(--danger); background-image: linear-gradient(var(--danger) 0 0); color: var(--danger); }
+.btn-liquid.btn-warning { border-color: var(--warning); background-image: linear-gradient(var(--warning) 0 0); color: var(--warning); }
+.btn-liquid.btn-info { border-color: #3b82f6; background-image: linear-gradient(#3b82f6 0 0); color: #3b82f6; }
+.btn-liquid.btn-success { border-color: var(--success); background-image: linear-gradient(var(--success) 0 0); color: var(--success); }
+.btn-liquid.btn-secondary { border-color: #4a4a58; background-image: linear-gradient(#4a4a58 0 0); color: #4a4a58; }
+
+/* --- SVG Animated Border Button --- */
+.Button {
+    background: none; padding: 0; border: none;
+    display: inline-block;
+    backface-visibility: hidden;
+    width: 220px; height: 50px;
+    position: relative;
+    color: #98A5A6; font-size: 16px;
+    transition: transform 300ms, color 300ms;
+    cursor: pointer;
+    text-decoration: none;
+    overflow: hidden;                /* keep SVG lines inside */
+}
+.Button:hover, .Button:focus { color: #BEC3C7; transform: scale(1.05); }
+.Button:hover .Button-line, .Button:focus .Button-line { animation-play-state: paused; }
+.Button-svg { position: absolute; top: 0; left: 0; display: block; width: 100%; height: 100%; fill: none; stroke: var(--primary-accent); stroke-width: 2px; pointer-events: none; }
+@keyframes outer-dashoffset { 0% { stroke-dashoffset: 0; stroke-dasharray: 336.05px 336.05px; } 50% { stroke-dasharray: 224.03px 448.06px; } 100% { stroke-dashoffset: 672.1px; stroke-dasharray: 336.05px 336.05px; } }
+.Button-line--outer { stroke-dasharray: 336.05px 336.05px; stroke-dashoffset: 0; animation: outer-dashoffset infinite linear 6s; }
+@keyframes inner-dashoffset { 0% { stroke-dashoffset: 0; stroke-dasharray: 336.05px 336.05px; } 50% { stroke-dasharray: 224.03px 448.06px; } 100% { stroke-dashoffset: -672.1px; stroke-dasharray: 336.05px 336.05px; } }
+.Button-line--inner { stroke-dashoffset: 0; stroke-dasharray: 336.05px 336.05px; animation: inner-dashoffset infinite linear 5s; stroke: var(--secondary-accent); }
+.Button-content { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; line-height: 1; }
+.Button.loading .Button-content { opacity: 0; }
+.Button .spinner-border { position: absolute; top: calc(50% - 0.6rem); left: calc(50% - 0.6rem); width: 1.2rem; height: 1.2rem; opacity: 0; }
+.Button.loading .spinner-border { opacity: 1; }
+
+/* --- Table Styles (global) --- */
+.table { --bs-table-bg: transparent; --bs-table-striped-bg: rgba(255, 255, 255, 0.02); --bs-table-color: var(--text-primary); border-color: var(--border-color); }
+.table thead th { color: var(--text-primary); font-weight: 600; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.05em; }
+.table th, .table td { padding: 1rem; vertical-align: middle; }
+.table-hover > tbody > tr { transition: all 0.2s ease; }
+.table > tbody > tr > td, .table > tbody > tr > td > input { color: var(--text-primary) !important; font-weight: 500; }
+.table td input.form-control-plaintext { background: transparent !important; padding-left: 0; }
+.table td input.form-control { background: var(--bg-dark) !important; border-color: var(--primary-accent); }
+.table-responsive { overflow-x: auto; }
+
+/* --- Flash Messages & Modals --- */
+.toast, .modal-content { background-color: var(--bg-light-glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--border-color); border-radius: 0.75rem; }
+.toast-container { position: fixed; top: 1.5rem; right: 1.5rem; z-index: 1100; }
+.toast-header { background-color: rgba(0,0,0,0.1); border-bottom: 1px solid var(--border-color); color: var(--text-primary); }
+.toast.bg-success { border-left: 4px solid var(--success); }
+.toast.bg-danger { border-left: 4px solid var(--danger); }
+.toast.bg-warning { border-left: 4px solid var(--warning); }
+.toast.bg-info { border-left: 4px solid #3b82f6; }
+.modal-header, .modal-footer { border-color: var(--border-color); }
+.btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
+
+/* --- Modal stacking context --- */
+.modal-backdrop { position: fixed !important; z-index: 1990 !important; }
+.modal { position: fixed; z-index: 2000 !important; }
+
+/* --- Misc safety --- */
+[disabled] { pointer-events: none; }
+
+/* =========================================================
+   DUPLICATE CHECKER — High-contrast theme & readability
+   ========================================================= */
+.dup-results .card-header {
+  background-color: var(--dup-header-bg) !important;
+}
+
+/* Metrics strip above the table */
+.dup-results .dup-metrics {
+  background-color: var(--dup-metrics-bg) !important;
+  color: var(--dup-metrics-text) !important;
+  border: 1px solid var(--border-color);
+}
+.dup-results .dup-metrics strong,
+.dup-results .dup-metrics em,
+.dup-results .dup-metrics span { color: #fff !important; }
+.dup-results .dup-metrics a { color: #fff !important; text-decoration: underline; opacity: 0.95; }
+.dup-results .dup-metrics a:hover { opacity: 1; }
+
+/* Table header: sticky & crisp */
+.dup-table thead th {
+  background: rgba(0,0,0,0.55);
+  color: #ffffff;
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  backdrop-filter: blur(6px);
+}
+
+/* Base table text more visible */
+.dup-table td, .dup-table th {
+  color: #f3f4fb !important;
+  font-weight: 600;
+}
+
+/* Gentle cyan tint on normal rows + stronger hover */
+.dup-table tbody tr { background-color: transparent; }
+.dup-table.table-hover > tbody > tr:hover {
+  background-color: var(--dup-row-hover-bg) !important;
+  box-shadow: none;
+  transform: none;
+}
+
+/* Duplicate rows: amber highlight with left border */
+.dup-table tbody tr.table-warning,
+.dup-table tbody tr.table-warning:hover {
+  background-color: var(--dup-duplicate-bg) !important;
+}
+.dup-table tbody tr.table-warning > * {
+  color: #242222 !important;
+}
+.dup-table tbody tr.table-warning {
+  border-left: 3px solid var(--dup-duplicate-border);
+}
+
+/* Duplicate badge: bold & readable */
+.dup-results .badge.bg-warning,
+.dup-results .badge.bg-warning.text-dark {
+  background-color: var(--dup-badge-bg) !important;
+  color: #111 !important;
+  border: 1px solid var(--dup-badge-ring);
+}
+/* Make the Reset button text white (normal + hover) */
+.btn-liquid.btn-secondary,
+.btn-liquid.btn-secondary:hover,
+.btn-liquid.btn-secondary:focus {
+  color: #fff !important;
+}
+
+/* make sure the span inherits that color */
+.btn-liquid.btn-secondary .btn-text {
+  color: inherit !important;
+}
+/* Liquid buttons: force white, bold text (normal + hover/focus) */
+.btn-liquid,
+.btn-liquid:hover,
+.btn-liquid:focus {
+  color: #fff !important;
+}
+
+.btn-liquid .btn-text {
+  color: inherit !important;
+  font-weight: 700 !important; /* bold */
+}
+/* Bold + white text for all .Button instances */
+.Button .Button-content {
+  font-weight: 700 !important;
+  color: #fff !important;
+}
+/* Base look for the file button */
+input[type="file"]::file-selector-button {
+  color: var(--text-primary);
+  background: var(--bg-light-glass);
+  border: 1px solid var(--border-color);
+  border-radius: .5rem;
+  padding: .5rem 1rem;
+  transition: color .15s ease, background-color .15s ease, border-color .15s ease;
+}
+
+/* When the system turns the button white on interaction, make the text black */
+input[type="file"]:is(:hover, :focus, :focus-within, :active)::file-selector-button {
+  background: #fff;
+  color: #111;               /* black text */
+  border-color: #fff;
+}
+
+/* Safari/WebKit fallback */
+input[type="file"]::-webkit-file-upload-button {
+  color: var(--text-primary);
+  background: var(--bg-light-glass);
+  border: 1px solid var(--border-color);
+  border-radius: .5rem;
+  padding: .5rem 1rem;
+  transition: color .15s ease, background-color .15s ease, border-color .15s ease;
+}
+input[type="file"]:is(:hover, :focus, :focus-within, :active)::-webkit-file-upload-button {
+  background: #fff;
+  color: #111;
+  border-color: #fff;
+}
+/* When a liquid button is disabled or in loading state, don't fill it */
+.btn-liquid:disabled,
+.btn-liquid.loading {
+  --p: 0% !important;              /* cancel the fill */
+  color: #fff !important;
+  pointer-events: none;
+}
+
+/* If you keep using .loading, don't hide the text for these quick actions */
+.btn-liquid.loading .btn-text { opacity: 1 !important; }
+/* (or, if you WANT a spinner, include one in the HTML and keep your original rules) */
+.btn-liquid.downloading { --p: 0% !important; color:#fff !important; }
+.btn-liquid.downloading .btn-text { opacity: 1 !important; }
+/* --- Option 3: Holographic Glass Header --- */
+.card-header {
+    font-weight: 600;
+    font-size: 1.1rem;
+    padding: 1.25rem 1.5rem;
+    color: var(--text-primary);
+    background-color: rgba(35, 37, 45, 0.7);
+    border-bottom: 1px solid var(--border-color);
+    position: relative;
+    overflow: hidden;
+}
+
+.card-header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -141%;
+    width: 300%;
+    height: 300%;
+    background: linear-gradient(
+        115deg, 
+        transparent 45%, 
+        rgba(56, 189, 248, 0.15) 50%, 
+        transparent 55%
+    );
+    transform: rotate(45deg);
+    transition: left 1s ease;
+}
+
+.card:hover .card-header::before {
+    left: -20%;
+}
+

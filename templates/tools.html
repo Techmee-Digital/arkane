@@ -1,305 +1,331 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="container-fluid bg-dark text-light p-4">
 
-  <ul class="nav nav-pills nav-fill mb-4 bg-secondary rounded">
-    <li class="nav-item">
-      <a class="nav-link {% if active_tab=='duplicate' %}active{% endif %}" href="{{ url_for('tools', tab='duplicate', token=dedupe.token) }}">
-        Duplicate Checker
-      </a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link {% if active_tab=='search' %}active{% endif %}" href="{{ url_for('tools', tab='search') }}">
-        Search Email
-      </a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link {% if active_tab=='merge' %}active{% endif %}" href="{{ url_for('tools', tab='merge') }}">
-        Bulk Merge
-      </a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link {% if active_tab=='viewdb' %}active{% endif %}" href="{{ url_for('tools', tab='viewdb') }}">
-        View Leads
-      </a>
-    </li>
-  </ul>
+<!-- Background: shooting-star (rain removed) -->
+<div class="bg-effects">
+  <div class="stars"></div>
+  <div class="shooting-star"></div>
+  <div class="shooting-star"></div>
+  <div class="shooting-star"></div>
+</div>
 
+<div class="content-wrapper">
   {% if active_tab=='duplicate' %}
-    <form id="dedupeForm" method="post" enctype="multipart/form-data" class="d-flex align-items-end mb-3 gap-2">
-      <input type="hidden" name="action" value="dedupe">
-      <div class="d-flex flex-column">
-        <label class="form-label text-light">Files</label>
-        <input type="file" name="file_upload" multiple accept=".xls,.xlsx" required class="form-control form-control-dark bg-secondary text-light border-light">
-      </div>
-      <button type="submit" class="btn btn-primary">Run Check</button>
-      <a href="{{ url_for('tools', tab='duplicate') }}" class="btn btn-dark">Refresh</a>
-    </form>
+    <div class="card">
+        <div class="card-header">Duplicate Checker</div>
+        <div class="card-body">
+            <form id="dedupeForm" method="post" enctype="multipart/form-data" class="d-flex align-items-end mb-4 gap-3 needs-loading-spinner">
+                <input type="hidden" name="action" value="dedupe">
+                <div class="flex-grow-1">
+                    <label for="file_upload" class="form-label">Upload Excel Files</label>
+                    <input type="file" name="file_upload" id="file_upload" multiple accept=".xls,.xlsx" required class="form-control">
+                </div>
+                <button type="submit" class="Button">
+                    <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                    <span class="Button-content">Run Check</span>
+                    <svg class="Button-svg" viewBox="0 0 220 50">
+                        <polyline class="Button-line Button-line--outer" points="1 1, 219 1, 219 49, 1 49, 1 1"></polyline>
+                        <polyline class="Button-line Button-line--inner" points="1 1, 219 1, 219 49, 1 49, 1 1"></polyline>
+                    </svg>
+                </button>
+                <a href="{{ url_for('tools', tab='duplicate') }}" class="btn btn-secondary btn-liquid">
+                    <span class="btn-text">Reset</span>
+                </a>
+            </form>
+        </div>
+    </div>
+    
     {% if dedupe.token %}
-      <div class="mb-3">
-        <form method="post" class="d-inline me-2">
-          <input type="hidden" name="action" value="save_all">
-          <input type="hidden" name="token" value="{{ dedupe.token }}">
-          <button class="btn btn-success">Save All</button>
-        </form>
-        <form method="post" class="d-inline">
-          <input type="hidden" name="action" value="save_dup">
-          <input type="hidden" name="token" value="{{ dedupe.token }}">
-          <button class="btn btn-warning">Save Duplicates</button>
-        </form>
-      </div>
-      <div class="mb-2 bg-secondary p-2 text-dark rounded">
-        Total leads: <strong>{{ dedupe.count_all }}</strong>
-        &nbsp;|&nbsp; Duplicates: <strong>{{ dedupe.count_dup }}</strong>
-        &nbsp;|&nbsp; Sources: <em>{{ dedupe.sources }}</em>
-      </div>
-      <div class="form-check form-switch mb-3">
-        <input class="form-check-input" type="checkbox" id="show_dups">
-        <label class="form-check-label" for="show_dups">Only show Duplicates</label>
-      </div>
-      <div class="table-responsive">
-        <table class="table table-dark table-striped">
-          <thead class="table-secondary text-dark">
-            <tr>
-              {% for f in dedupe.fields %}<th>{{ f }}</th>{% endfor %}
-              <th>Origin</th>
-              <th>Duplicate</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for r in dedupe.rows %}
-            <tr data-dup="{{ '1' if r.duplicate else '0' }}">
-              {% for f in dedupe.fields %}<td>{{ r[f] }}</td>{% endfor %}
-              <td>{{ r.origin }}</td>
-              <td>{{ 'Duplicate' if r.duplicate else '' }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <div class="card dup-results">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>Results</span>
+          <div class="d-flex align-items-center gap-3">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="show_dups">
+              <label class="form-check-label" for="show_dups">Show Duplicates Only</label>
+            </div>
+            <form method="post" class="d-inline needs-loading-spinner">
+                <input type="hidden" name="action" value="save_all">
+                <input type="hidden" name="token" value="{{ dedupe.token }}">
+                <button class="btn btn-sm btn-success btn-liquid">
+                    <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                    <span class="btn-text">Save All</span>
+                </button>
+            </form>
+          </div>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-secondary dup-metrics d-flex justify-content-around p-2">
+                <span>Total Leads: <strong>{{ dedupe.count_all }}</strong></span>
+                <span>Duplicates: <strong>{{ dedupe.count_dup }}</strong></span>
+                <span>Sources: <em>{{ dedupe.sources }}</em></span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover dup-table">
+                    <thead>
+                        <tr>
+                        {% for f in dedupe.fields %}<th>{{ f }}</th>{% endfor %}
+                        <th>Origin</th>
+                        <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in dedupe.rows %}
+                        <tr data-dup="{{ '1' if r.duplicate else '0' }}" class="{{ 'table-warning' if r.duplicate }}">
+                        {% for f in dedupe.fields %}<td>{{ r[f] }}</td>{% endfor %}
+                        <td><small>{{ r.origin }}</small></td>
+                        <td>
+                            {% if r.duplicate %}
+                            <span class="badge bg-warning text-dark">Duplicate</span>
+                            {% else %}
+                            <span class="badge bg-success">Unique</span>
+                            {% endif %}
+                        </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
       </div>
       <script>
         if (document.getElementById('show_dups')) {
-          document.getElementById('show_dups').onchange = function () {
-            document.querySelectorAll('tbody tr').forEach(tr => {
-              tr.style.display = (this.checked && tr.dataset.dup === '0') ? 'none' : '';
-            });
-          };
+            document.getElementById('show_dups').onchange = function () {
+                document.querySelectorAll('tbody tr').forEach(tr => {
+                    const isDuplicate = tr.dataset.dup === '1';
+                    tr.style.display = (this.checked && !isDuplicate) ? 'none' : '';
+                });
+            };
         }
       </script>
     {% endif %}
   {% endif %}
 
   {% if active_tab=='search' %}
-    <form method="post" class="mb-3">
-      <input type="hidden" name="action" value="search">
-      <div class="input-group">
-        <input type="email" name="search_email" class="form-control form-control-dark bg-secondary text-light border-light" placeholder="Enter email" required>
-        <button class="btn btn-primary">Search</button>
-      </div>
-    </form>
+    <div class="card">
+        <div class="card-header">Search by Email</div>
+        <div class="card-body">
+            <form method="post" class="needs-loading-spinner">
+                <input type="hidden" name="action" value="search">
+                <div class="input-group">
+                    <input type="email" name="search_email" class="form-control form-control-lg" placeholder="Enter email" required>
+                    <button type="submit" class="Button" style="width: 150px; height: 50px; border-radius: 0 0.5rem 0.5rem 0;">
+                        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                        <span class="Button-content">Search</span>
+                        <svg class="Button-svg" viewBox="0 0 150 50">
+                            <polyline class="Button-line Button-line--outer" points="1 1, 149 1, 149 49, 1 49, 1 1"></polyline>
+                            <polyline class="Button-line Button-line--inner" points="1 1, 149 1, 149 49, 1 49, 1 1"></polyline>
+                        </svg>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
     {% if search_results %}
-    <div class="table-responsive">
-      <table class="table table-dark table-striped">
-        <thead class="table-secondary text-dark">
-          <tr>
-            <th>Email</th><th>Company</th><th>Quarter</th><th>Campaign</th><th>Source</th><th>Exclusions</th><th>Uploaded</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for l in search_results %}
-          <tr>
-            <td>{{ l.email }}</td>
-            <td>{{ l.company }}</td>
-            <td>{{ l.quarter }}</td>
-            <td>{{ l.campaign }}</td>
-            <td>{{ l.source_file }}</td>
-            <td>{{ l.exclusions }}</td>
-            <td>{{ l.upload_date.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="card">
+        <div class="card-header">Search Results</div>
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                <tr>
+                    <th>Email</th><th>Company</th><th>Quarter</th><th>Campaign</th><th>Source</th><th>Exclusions</th><th>Uploaded</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for l in search_results %}
+                <tr>
+                    <td>{{ l.email }}</td>
+                    <td>{{ l.company }}</td>
+                    <td>{{ l.quarter }}</td>
+                    <td>{{ l.campaign }}</td>
+                    <td>{{ l.source_file }}</td>
+                    <td>{{ l.exclusions }}</td>
+                    <td>{{ l.upload_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
     {% endif %}
   {% endif %}
 
   {% if active_tab=='merge' %}
-    <form method="post" enctype="multipart/form-data" class="mb-3 row g-2 align-items-end">
-      <input type="hidden" name="action" value="merge">
-      <div class="col-auto">
-        <label class="form-label text-light">Files</label>
-        <input type="file" name="file_merge" multiple accept=".xls,.xlsx" required class="form-control form-control-dark bg-secondary text-light border-light">
-      </div>
-      <div class="col-auto">
-        <button class="btn btn-primary">Merge</button>
-      </div>
-      {% if merge.download %}
-      <div class="col-auto">
-        <a href="{{ url_for('uploaded_file', filename=merge.download) }}" class="btn btn-success">Download Merged File</a>
-      </div>
-      {% endif %}
-    </form>
+    <div class="card">
+        <div class="card-header">Bulk Merge Excel Files</div>
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data" class="d-flex align-items-end gap-3 needs-loading-spinner">
+                <input type="hidden" name="action" value="merge">
+                <div class="flex-grow-1">
+                    <label class="form-label">Select Files to Merge</label>
+                    <input type="file" name="file_merge" multiple accept=".xls,.xlsx" required class="form-control">
+                </div>
+                <button type="submit" class="Button">
+                    <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                    <span class="Button-content">Merge Files</span>
+                    <svg class="Button-svg" viewBox="0 0 220 50">
+                        <polyline class="Button-line Button-line--outer" points="1 1, 219 1, 219 49, 1 49, 1 1"></polyline>
+                        <polyline class="Button-line Button-line--inner" points="1 1, 219 1, 219 49, 1 49, 1 1"></polyline>
+                    </svg>
+                </button>
+                {% if merge.download %}
+                    <a href="{{ url_for('uploaded_file', filename=merge.download) }}" class="btn btn-success btn-liquid">
+                        <span class="btn-text">Download Merged</span>
+                    </a>
+                {% endif %}
+            </form>
+        </div>
+    </div>
     {% if merge.records %}
-    <div class="table-responsive">
-      <table class="table table-dark table-striped">
-        <thead class="table-secondary text-dark">
-          <tr>{% for h in merge.headers %}<th>{{ h }}</th>{% endfor %}</tr>
-        </thead>
-        <tbody>
-          {% for r in merge.records %}
-          <tr>{% for h in merge.headers %}<td>{{ r[h] }}</td>{% endfor %}</tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="card">
+        <div class="card-header">Merged Preview (first 100 rows)</div>
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>{% for h in merge.headers %}<th>{{ h }}</th>{% endfor %}</tr>
+                </thead>
+                <tbody>
+                    {% for r in merge.records[:100] %}
+                    <tr>{% for h in merge.headers %}<td>{{ r[h] }}</td>{% endfor %}</tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
     {% endif %}
   {% endif %}
 
   {% if active_tab=='viewdb' %}
-  <!-- Filters -->
-  <form method="GET" class="mb-3 p-3 bg-secondary rounded">
-    <input type="hidden" name="tab" value="viewdb">
-    <div class="row g-3 align-items-center">
-      <div class="col-auto fw-bold">Filters:</div>
-
-      <div class="col-auto">
-        <div class="form-check form-switch">
-          <input class="form-check-input" type="checkbox" id="chkEmail" name="enable_email" value="1" {% if request.values.enable_email %}checked{% endif %}>
-          <label class="form-check-label" for="chkEmail">Email</label>
+  <div class="card">
+    <div class="card-header">Filter Leads</div>
+    <div class="card-body">
+      <form method="GET" class="needs-loading-spinner">
+        <input type="hidden" name="tab" value="viewdb">
+        <div class="row g-3 align-items-center">
+            {% set filters = [('email', 'Email'), ('campaign', 'Campaign'), ('company', 'Company'), ('source', 'Source')] %}
+            {% for name, label in filters %}
+            <div class="col-md-6 col-lg-3 d-flex align-items-center">
+                <div class="form-check form-switch me-2">
+                  <input class="form-check-input" type="checkbox" id="chk{{ label }}" name="enable_{{ name }}" value="1" {% if request.values['enable_' + name] %}checked{% endif %}>
+                  <label class="form-check-label" for="chk{{ label }}">{{ label }}</label>
+                </div>
+                <input type="text" name="filter_{{ name }}" value="{{ request.values['filter_' + name] or '' }}" class="form-control form-control-sm">
+            </div>
+            {% endfor %}
         </div>
-      </div>
-      <div class="col-auto">
-        <input type="text" name="filter_email" value="{{ request.values.filter_email or '' }}" class="form-control form-control-dark bg-dark text-light border-light" placeholder="Email contains...">
-      </div>
-
-      <div class="col-auto">
-        <div class="form-check form-switch">
-          <input class="form-check-input" type="checkbox" id="chkCampaign" name="enable_campaign" value="1" {% if request.values.enable_campaign %}checked{% endif %}>
-          <label class="form-check-label" for="chkCampaign">Campaign</label>
+        <hr class="my-3" style="border-color: var(--border-color);">
+        <div class="d-flex justify-content-end gap-2 flex-wrap">
+            <a href="{{ url_for('tools', tab='viewdb') }}" class="Button" style="width: 180px;">
+                <span class="Button-content">Clear Filters</span>
+                <svg class="Button-svg" viewBox="0 0 180 50"><polyline class="Button-line Button-line--outer" points="1 1, 179 1, 179 49, 1 49, 1 1"></polyline><polyline class="Button-line Button-line--inner" points="1 1, 179 1, 179 49, 1 49, 1 1"></polyline></svg>
+            </a>
+            <button type="submit" class="Button" style="width: 180px;">
+                <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                <span class="Button-content">Apply Filters</span>
+                <svg class="Button-svg" viewBox="0 0 180 50"><polyline class="Button-line Button-line--outer" points="1 1, 179 1, 179 49, 1 49, 1 1"></polyline><polyline class="Button-line Button-line--inner" points="1 1, 179 1, 179 49, 1 49, 1 1"></polyline></svg>
+            </button>
         </div>
-      </div>
-      <div class="col-auto">
-        <input type="text" name="filter_campaign" value="{{ request.values.filter_campaign or '' }}" class="form-control form-control-dark bg-dark text-light border-light" placeholder="Campaign contains...">
-      </div>
-
-      <div class="col-auto">
-        <div class="form-check form-switch">
-          <input class="form-check-input" type="checkbox" id="chkCompany" name="enable_company" value="1" {% if request.values.enable_company %}checked{% endif %}>
-          <label class="form-check-label" for="chkCompany">Company</label>
-        </div>
-      </div>
-      <div class="col-auto">
-        <input type="text" name="filter_company" value="{{ request.values.filter_company or '' }}" class="form-control form-control-dark bg-dark text-light border-light" placeholder="Company contains...">
-      </div>
-
-      <div class="col-auto">
-        <div class="form-check form-switch">
-          <input class="form-check-input" type="checkbox" id="chkSource" name="enable_source" value="1" {% if request.values.enable_source %}checked{% endif %}>
-          <label class="form-check-label" for="chkSource">Source</label>
-        </div>
-      </div>
-      <div class="col-auto">
-        <input type="text" name="filter_source" value="{{ request.values.filter_source or '' }}" class="form-control form-control-dark bg-dark text-light border-light" placeholder="Source contains...">
-      </div>
-
-      <div class="col-auto">
-        <button type="submit" class="btn btn-primary">Apply Filters</button>
-        <a href="{{ url_for('tools', tab='viewdb') }}" class="btn btn-dark">Clear Filters</a>
-      </div>
+      </form>
     </div>
-  </form>
+  </div>
 
-  <form method="POST" id="leadsForm">
-    <input type="hidden" name="action" id="action_hidden">
-    <input type="hidden" name="admin_pass" id="admin_pass_hidden">
+  <div class="card">
+    <form method="POST" id="leadsForm" class="needs-loading-spinner">
+        <input type="hidden" name="action" id="action_hidden">
+        <input type="hidden" name="admin_pass" id="admin_pass_hidden">
+        {% for name, label in filters %}
+            <input type="hidden" name="enable_{{ name }}" value="{% if request.values['enable_' + name] %}1{% endif %}">
+            <input type="hidden" name="filter_{{ name }}" value="{{ request.values['filter_' + name] or '' }}">
+        {% endfor %}
+        
+        <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+          <span>Database Leads ({{ viewdb|length }} results)</span>
+          <div class="d-flex flex-wrap gap-2">
+            <div class="btn-group">
+                <button type="button" class="btn btn-sm btn-warning btn-liquid" data-bs-toggle="modal" data-bs-target="#passwordModal" data-action="update_selected"><span class="btn-text">Edit Selected</span></button>
+                <button type="button" class="btn btn-sm btn-danger btn-liquid" data-bs-toggle="modal" data-bs-target="#passwordModal" data-action="delete_selected"><span class="btn-text">Delete Selected</span></button>
+                <button type="button" class="btn btn-sm btn-info btn-liquid" id="btnDownloadSelected"><span class="btn-text">Download Selected</span></button>
+            </div>
+            <div class="btn-group">
+                 <button type="button" class="btn btn-sm btn-info btn-liquid" id="btnDownloadFiltered"><span class="btn-text">Download Filtered</span></button>
+                <button type="button" class="btn btn-sm btn-info btn-liquid" id="btnDownloadAll"><span class="btn-text">Download All</span></button>
+            </div>
+            {% if request.values.get('enable_source') and request.values.filter_source %}
+            <button type="button" class="btn btn-sm btn-outline-danger btn-liquid" data-bs-toggle="modal" data-bs-target="#passwordModal" data-action="delete_source_results"><span class="btn-text">Delete All From Source</span></button>
+            <input type="hidden" name="source_to_delete" value="{{ request.values.filter_source }}">
+            {% endif %}
 
-    <input type="hidden" name="enable_email" value="{% if request.values.enable_email %}1{% endif %}">
-    <input type="hidden" name="filter_email" value="{{ request.values.filter_email or '' }}">
-    <input type="hidden" name="enable_campaign" value="{% if request.values.enable_campaign %}1{% endif %}">
-    <input type="hidden" name="filter_campaign" value="{{ request.values.filter_campaign or '' }}">
-    <input type="hidden" name="enable_company" value="{% if request.values.enable_company %}1{% endif %}">
-    <input type="hidden" name="filter_company" value="{{ request.values.filter_company or '' }}">
-    <input type="hidden" name="enable_source" value="{% if request.values.enable_source %}1{% endif %}">
-    <input type="hidden" name="filter_source" value="{{ request.values.filter_source or '' }}">
+            <button type="submit" id="saveBtn" class="btn btn-sm btn-success btn-liquid" style="display:none;">
+                <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                <span class="btn-text">Save Changes</span>
+            </button>
+            <button type="button" id="cancelBtn" class="btn btn-sm btn-secondary btn-liquid" style="display:none;"><span class="btn-text">Cancel</span></button>
+          </div>
+        </div>
 
-    <div class="d-flex align-items-center flex-wrap gap-2 p-3 mb-3 bg-secondary rounded">
-      <span class="fw-bold text-light">With Selected:</span>
-      <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#passwordModal" data-action="update_selected">Edit</button>
-      <button type="button" class="btn btn-danger"  data-bs-toggle="modal" data-bs-target="#passwordModal" data-action="delete_selected">Delete</button>
-
-      <button type="button" class="btn btn-info" id="btnDownloadSelected">Download</button>
-
-      <div class="vr mx-2"></div>
-      <span class="fw-bold text-light">Bulk Download:</span>
-      <button type="button" class="btn btn-info" id="btnDownloadAll">Download All</button>
-      <button type="button" class="btn btn-info" id="btnDownloadFiltered">Download Filtered</button>
-
-      <button type="submit" id="saveBtn" class="btn btn-success" style="display:none;">Save Changes</button>
-      <button type="button" id="cancelBtn" class="btn btn-dark" style="display:none;">Cancel</button>
-
-      {% if request.values.get('enable_source') and request.values.filter_source %}
-      <div class="vr mx-2"></div>
-      <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#passwordModal" data-action="delete_source_results">
-        Delete All From Source '{{ request.values.filter_source }}'
-      </button>
-      <input type="hidden" name="source_to_delete" value="{{ request.values.filter_source }}">
-      {% endif %}
-    </div>
-
-    <div class="table-responsive">
-      <table class="table table-dark table-striped table-hover">
-        <thead class="table-secondary text-dark">
-          <tr>
-            <th style="width: 3%;"><input type="checkbox" id="select_all" aria-label="Select all rows"></th>
-            <th>Email</th><th>Company</th><th>Quarter</th><th>Campaign</th><th>Source File</th><th>Exclusions</th><th>Uploaded</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for l in viewdb %}
-          <tr data-lead-id="{{ l.id }}">
-            <td><input type="checkbox" class="lead_checkbox" name="lead_ids" value="{{ l.id }}"></td>
-            <td><input name="email_{{ l.id }}"       value="{{ l.email }}"         readonly class="form-control-plaintext form-control-sm text-light lead-input"></td>
-            <td><input name="company_{{ l.id }}"     value="{{ l.company or '' }}" readonly class="form-control-plaintext form-control-sm text-light lead-input"></td>
-            <td><input name="quarter_{{ l.id }}"     value="{{ l.quarter or '' }}" readonly class="form-control-plaintext form-control-sm text-light lead-input"></td>
-            <td><input name="campaign_{{ l.id }}"    value="{{ l.campaign or '' }}" readonly class="form-control-plaintext form-control-sm text-light lead-input"></td>
-            <td><input name="source_file_{{ l.id }}" value="{{ l.source_file or '' }}" readonly class="form-control-plaintext form-control-sm text-light lead-input"></td>
-            <td><input name="exclusions_{{ l.id }}"  value="{{ l.exclusions or '' }}"  readonly class="form-control-plaintext form-control-sm text-light lead-input"></td>
-            <td>{{ l.upload_date.strftime('%Y-%m-%d %H:%M') }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </form>
-
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th style="width: 3%;"><input type="checkbox" class="form-check-input" id="select_all"></th>
+                        <th>Email</th><th>Company</th><th>Quarter</th><th>Campaign</th><th>Source File</th><th>Exclusions</th><th>Uploaded</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for l in viewdb %}
+                    <tr data-lead-id="{{ l.id }}">
+                        <td><input type="checkbox" class="form-check-input lead_checkbox" name="lead_ids" value="{{ l.id }}"></td>
+                        <td><input name="email_{{ l.id }}" value="{{ l.email }}" readonly class="form-control-plaintext form-control-sm lead-input"></td>
+                        <td><input name="company_{{ l.id }}" value="{{ l.company or '' }}" readonly class="form-control-plaintext form-control-sm lead-input"></td>
+                        <td><input name="quarter_{{ l.id }}" value="{{ l.quarter or '' }}" readonly class="form-control-plaintext form-control-sm lead-input"></td>
+                        <td><input name="campaign_{{ l.id }}" value="{{ l.campaign or '' }}" readonly class="form-control-plaintext form-control-sm lead-input"></td>
+                        <td><input name="source_file_{{ l.id }}" value="{{ l.source_file or '' }}" readonly class="form-control-plaintext form-control-sm lead-input"></td>
+                        <td><input name="exclusions_{{ l.id }}" value="{{ l.exclusions or '' }}" readonly class="form-control-plaintext form-control-sm lead-input"></td>
+                        <td>{{ l.upload_date.strftime('%Y-%m-%d') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </form>
+  </div>
+  
+  <!-- Modal -->
   <div class="modal fade" id="passwordModal" tabindex="-1" aria-labelledby="passwordModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content bg-dark text-light">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="passwordModalLabel">Administrator Password Required</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          <h5 class="modal-title" id="passwordModalLabel">Admin Password Required</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
           <p id="modal-prompt-text">Please enter the admin password to proceed.</p>
           <input type="password" class="form-control" id="modal_password_input" placeholder="Password" autocomplete="current-password">
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-          <button type="button" class="btn btn-primary" id="confirmPasswordBtn">Confirm</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><span class="btn-text">Close</span></button>
+          <button type="button" class="btn btn-primary" id="confirmPasswordBtn"><span class="btn-text">Confirm</span></button>
         </div>
       </div>
     </div>
   </div>
 
-  <script>
-  const passwordModalEl = document.getElementById('passwordModal');
-  const leadsForm        = document.getElementById('leadsForm');
-  const saveBtn          = document.getElementById('saveBtn');
-  const cancelBtn        = document.getElementById('cancelBtn');
-  const btnDownloadSel   = document.getElementById('btnDownloadSelected');
-  const btnDownloadAll   = document.getElementById('btnDownloadAll');
-  const btnDownloadFilt  = document.getElementById('btnDownloadFiltered');
+ <script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Make sure the modal sits on <body>
+  const modalEl = document.getElementById('passwordModal');
+  if (modalEl && modalEl.parentElement !== document.body) {
+    document.body.appendChild(modalEl);
+  }
+
+  const leadsForm       = document.getElementById('leadsForm');
+  const saveBtn         = document.getElementById('saveBtn');
+  const cancelBtn       = document.getElementById('cancelBtn');
+  const btnDownloadSel  = document.getElementById('btnDownloadSelected');
+  const btnDownloadAll  = document.getElementById('btnDownloadAll');
+  const btnDownloadFilt = document.getElementById('btnDownloadFiltered');
   let currentAction = '';
+  let actionTriggerButton = null;
 
   function getSelectedIds() {
     return Array.from(document.querySelectorAll('.lead_checkbox:checked')).map(cb => cb.value);
@@ -308,125 +334,146 @@
     document.querySelectorAll('.lead-input').forEach(inp => inp.disabled = true);
   }
 
-  if (passwordModalEl) {
-    passwordModalEl.addEventListener('show.bs.modal', function (event) {
-      const button = event.relatedTarget;
-      currentAction = button.getAttribute('data-action');
-      document.getElementById('modal_password_input').value = '';
+  // Bootstrap modal
+  let bsModal = null;
+  if (modalEl) { bsModal = new bootstrap.Modal(modalEl); }
 
-      const needsSelection = ['update_selected', 'delete_selected'];
-      if (needsSelection.includes(currentAction) && getSelectedIds().length === 0) {
-        alert('Please select at least one lead first.');
-        event.preventDefault();
-        return;
-      }
+  // Modal open-time logic
+  modalEl?.addEventListener('show.bs.modal', function (event) {
+    actionTriggerButton = event.relatedTarget || null;
+    currentAction = actionTriggerButton ? actionTriggerButton.getAttribute('data-action') : '';
+    document.getElementById('modal_password_input').value = '';
 
-      const promptText = document.getElementById('modal-prompt-text');
-      if (currentAction === 'delete_selected') {
-        promptText.textContent = `Enter password to DELETE ${getSelectedIds().length} lead(s). This deletes all records for those email(s) across all sources.`;
-      } else if (currentAction === 'delete_source_results') {
-        const sourceName = (document.querySelector('input[name="source_to_delete"]') || {}).value || '';
-        promptText.textContent = `Enter password to DELETE ALL leads from source '${sourceName}'. This is permanent.`;
-      } else {
-        promptText.textContent = 'Please enter the admin password to proceed.';
-      }
-    });
-  }
+    const needsSelection = ['update_selected', 'delete_selected'];
+    if (needsSelection.includes(currentAction) && getSelectedIds().length === 0) {
+      event.preventDefault();
+      alert('Please select at least one lead first.');
+      return;
+    }
 
-  function hardCloseModal() {
-    const modal = bootstrap.Modal.getOrCreateInstance(passwordModalEl);
-    modal.hide();
-    setTimeout(() => {
-      document.body.classList.remove('modal-open');
-      document.body.style.removeProperty('padding-right');
-      document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-    }, 150);
-  }
+    const promptText = document.getElementById('modal-prompt-text');
+    if (currentAction === 'delete_selected') {
+      promptText.textContent = `Enter password to DELETE ${getSelectedIds().length} lead(s). This deletes all records for those email(s) across all sources.`;
+    } else if (currentAction === 'delete_source_results') {
+      const sourceName = (document.querySelector('input[name="source_to_delete"]') || {}).value || '';
+      promptText.textContent = `Enter password to DELETE ALL leads from source '${sourceName}'. This is permanent.`;
+    } else {
+      promptText.textContent = 'Please enter the admin password to proceed.';
+    }
+  });
+
+  modalEl?.addEventListener('shown.bs.modal', () => {
+    document.getElementById('modal_password_input')?.focus();
+  });
 
   document.getElementById('confirmPasswordBtn')?.addEventListener('click', () => {
     const pwd = document.getElementById('modal_password_input').value.trim();
-    if (!pwd) {
-      alert('Password cannot be empty.');
+    if (!pwd) { 
+      document.getElementById('modal_password_input').focus();
       return;
     }
     document.getElementById('admin_pass_hidden').value = pwd;
     document.getElementById('action_hidden').value     = currentAction;
 
-    if (currentAction === 'update_selected') {
-      hardCloseModal();
+    bsModal?.hide();
 
+    if (currentAction === 'update_selected') {
       const ids = getSelectedIds();
       ids.forEach(id => {
         document.querySelectorAll(`tr[data-lead-id='${id}'] .lead-input`).forEach(input => {
           input.readOnly = false;
           input.classList.remove('form-control-plaintext');
-          input.classList.add('form-control', 'bg-dark');
-          input.disabled = false; // ensure enabled for selected rows
+          input.classList.add('form-control');
+          input.disabled = false;
         });
       });
-
-      saveBtn.style.display   = 'inline-block';
-      cancelBtn.style.display = 'inline-block';
-      const firstEditable = document.querySelector(`tr[data-lead-id='${ids[0]}'] .lead-input`);
-      firstEditable?.focus();
-
+      saveBtn.style.display   = 'inline-flex';
+      cancelBtn.style.display = 'inline-flex';
+      document.querySelector(`tr[data-lead-id='${ids[0]}'] .lead-input`)?.focus();
     } else {
+      if (actionTriggerButton) {
+        actionTriggerButton.classList.add('loading');
+        actionTriggerButton.disabled = true;
+      }
       disableAllRowInputs();
       leadsForm.submit();
     }
   });
 
+  // Table selection helpers
   document.getElementById('select_all')?.addEventListener('change', function () {
-    document.querySelectorAll('.lead_checkbox').forEach(cb => { cb.checked = this.checked; });
+    document.querySelectorAll('.lead_checkbox').forEach(cb => { 
+      cb.checked = this.checked;
+      cb.closest('tr').classList.toggle('table-active', this.checked);
+    });
+  });
+  document.querySelectorAll('.lead_checkbox').forEach(cb => {
+    cb.addEventListener('change', function() {
+      this.closest('tr').classList.toggle('table-active', this.checked);
+    });
   });
 
-  cancelBtn?.addEventListener('click', () => {
-    window.location.reload();
-  });
+  cancelBtn?.addEventListener('click', () => { window.location.reload(); });
 
+  // Save inline edits
   saveBtn?.addEventListener('click', function (e) {
-    const ids = getSelectedIds();
-    if (!ids.length) {
+    if (!getSelectedIds().length) {
       e.preventDefault();
       alert('Please select at least one lead to save changes.');
       return;
     }
-
-    const selected = new Set(ids);
+    const selected = new Set(getSelectedIds());
     document.querySelectorAll('tbody tr[data-lead-id]').forEach(tr => {
       const id = tr.getAttribute('data-lead-id');
       tr.querySelectorAll('.lead-input').forEach(input => {
         input.disabled = !selected.has(id);
       });
     });
-
     document.getElementById('action_hidden').value = 'update_selected';
-    document.getElementById('leadsForm').submit();
   });
 
-  btnDownloadSel?.addEventListener('click', function () {
-    const ids = getSelectedIds();
-    if (!ids.length) {
+  // -------- DOWNLOAD ACTIONS (clean) --------
+  function submitAction(actionName, buttonEl) {
+    if (actionName === 'download_selected' && getSelectedIds().length === 0) {
       alert('Please select at least one lead to download.');
       return;
     }
-    disableAllRowInputs();
-    document.getElementById('action_hidden').value = 'download_selected';
-    leadsForm.submit();
-  });
 
-  btnDownloadAll?.addEventListener('click', function () {
+    if (buttonEl) {
+      buttonEl.classList.add('loading');
+      buttonEl.disabled = true;
+
+      // safety re-enable in case the browser doesn't navigate/reload
+      setTimeout(function () {
+        buttonEl.classList.remove('loading');
+        buttonEl.disabled = false;
+      }, 1500);
+    }
+
     disableAllRowInputs();
-    document.getElementById('action_hidden').value = 'download_all';
+    document.getElementById('action_hidden').value = actionName;
     leadsForm.submit();
+  }
+
+  // Wire buttons
+  btnDownloadSel?.addEventListener('click', (e) => submitAction('download_selected', e.currentTarget));
+  btnDownloadAll?.addEventListener('click', (e) => submitAction('download_all', e.currentTarget));
+  btnDownloadFilt?.addEventListener('click', (e) => submitAction('download_filtered', e.currentTarget));
+
+  // Generic "loading" for forms that actually use a submit button
+  const forms = document.querySelectorAll('.needs-loading-spinner');
+  forms.forEach(form => {
+    form.addEventListener('submit', function(e) {
+      const submitBtn = e.submitter; // only if a real button was clicked
+      if (submitBtn) {
+        submitBtn.classList.add('loading');
+        submitBtn.disabled = true;
+      }
+    });
   });
-  btnDownloadFilt?.addEventListener('click', function () {
-    disableAllRowInputs();
-    document.getElementById('action_hidden').value = 'download_filtered';
-    leadsForm.submit();
-  });
-  </script>
+});
+</script>
+
   {% endif %}
-
 </div>
 {% endblock %}

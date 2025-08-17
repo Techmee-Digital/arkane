@@ -45,14 +45,18 @@ def create_app():
     )
     app.config['ADMIN_ACTION_PASSWORD'] = os.getenv('ADMIN_ACTION_PASSWORD', 'Cricket12')
 
+    # ensure upload folder exists
     Path(app.config['UPLOAD_FOLDER']).mkdir(parents=True, exist_ok=True)
 
+    # ─── Initialize extensions ──────────────────────────────────────
     db.init_app(app)
     Migrate(app, db)
 
+    # ─── Login manager setup ─────────────────────────────────────────
     login_manager = LoginManager()
     login_manager.init_app(app)
     login_manager.login_view = 'login'
+    login_manager.login_message = None  # 
 
     @login_manager.user_loader
     def load_user(user_id):
@@ -72,6 +76,7 @@ def create_app():
 
     @app.errorhandler(413)
     def file_too_large(e):
+        # Friendlier error; most often happens when posting every input on big tables
         flash(
             f"Request too large. Tip: for actions use the buttons which now submit only the selected rows. "
             f"(Max {app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)} MB).",
@@ -79,6 +84,7 @@ def create_app():
         )
         return redirect(url_for('tools', tab='viewdb'))
 
+    # ─── Login routes ──────────────────────────────────────────────
     @app.route('/login', methods=['GET', 'POST'])
     def login():
         if current_user.is_authenticated:
@@ -99,17 +105,20 @@ def create_app():
         logout_user()
         return redirect(url_for('login'))
 
+    # ─── Main tool route ───────────────────────────────────────────
     @app.route('/', methods=['GET', 'POST'])
     @login_required
     def tools():
         active_tab = request.values.get('tab', 'duplicate')
         token = request.values.get('token', '')
 
+        # default contexts
         dedupe_ctx = {"token": "", "rows": [], "fields": [], "dup_set": set(),
                       "count_all": 0, "count_dup": 0, "sources": ""}
         search_results = None
         merge_ctx = {}
 
+        # ---------- GET (token refresh for Duplicate Checker) ----------
         if request.method == 'GET' and token:
             cache_path = Path(current_app.config['UPLOAD_FOLDER']) / f"_cache_{token}.parquet"
             if cache_path.exists():
@@ -150,10 +159,12 @@ def create_app():
                     "sources": ", ".join(big["__src__"].unique())
                 }
 
+        # ---------- POST (all actions) ----------
         if request.method == 'POST':
             action = request.form.get('action', '')
             admin_pass = request.form.get("admin_pass", "")
 
+            # ===== Update Selected (inline) =====
             if action == "update_selected":
                 if admin_pass != current_app.config['ADMIN_ACTION_PASSWORD']:
                     flash("Invalid Admin Password.", "danger")
@@ -186,6 +197,7 @@ def create_app():
 
                 return redirect(url_for("tools", tab="viewdb"))
 
+            # ===== Delete Selected — delete ONLY the checked row(s) by ID =====
             elif action == "delete_selected":
                 if admin_pass != current_app.config['ADMIN_ACTION_PASSWORD']:
                     flash("Invalid Admin Password.", "danger")
@@ -196,14 +208,9 @@ def create_app():
                     flash('No leads were selected to delete.', 'warning')
                     return redirect(url_for("tools", tab="viewdb"))
 
-                emails = [e for (e,) in db.session.query(Lead.email).filter(Lead.id.in_(selected_ids)).distinct().all()]
-                if not emails:
-                    flash("Could not resolve emails for selected rows.", "warning")
-                    return redirect(url_for("tools", tab="viewdb"))
-
-                deleted = Lead.query.filter(Lead.email.in_(emails)).delete(synchronize_session=False)
+                deleted = Lead.query.filter(Lead.id.in_(selected_ids)).delete(synchronize_session=False)
                 db.session.commit()
-                flash(f"Deleted {deleted} record(s) across all sources for the selected email(s).", "success")
+                flash(f"{deleted} selected record(s) deleted.", "success")
                 return redirect(url_for("tools", tab="viewdb"))
 
             # ===== Delete all from Source (when filtered by source) =====
@@ -221,11 +228,14 @@ def create_app():
                     flash(f"Deleted {deleted} lead(s) from source '{src}'", "success")
                 return redirect(url_for("tools", tab="viewdb"))
 
+            # ===== Download actions (no password required) =====
             elif action in ['download_selected', 'download_all', 'download_filtered']:
-                try:
+                try:   
+                    print("DOWNLOAD FORM DATA:", dict(request.form)) 
+
                     query = Lead.query
                     filename = "leads.xlsx"
-
+              
                     if action == 'download_all':
                         filename = "all_leads.xlsx"
 
@@ -276,6 +286,7 @@ def create_app():
                     flash(f"Unexpected error during download: {e}", "danger")
                     return redirect(url_for('tools', tab='viewdb'))
 
+            # ===== Dedupe upload =====
             elif action == "dedupe":
                 files = request.files.getlist("file_upload")
                 if not files or not files[0].filename:
@@ -347,6 +358,7 @@ def create_app():
                     "sources": ", ".join(srcs)
                 }
 
+            # ===== Save (all or duplicates) =====
             elif action in ("save_all", "save_dup"):
                 token = request.form.get("token", "")
                 cache_path = Path(current_app.config['UPLOAD_FOLDER']) / f"_cache_{token}.parquet"
@@ -387,6 +399,7 @@ def create_app():
                 flash(f"{saved} rows saved", "success")
                 return redirect(url_for("tools", tab="duplicate"))
 
+            # ===== Exact email search =====
             elif action == "search":
                 q = (request.form.get("search_email", "") or "").strip().lower()
                 search_results = Lead.query.filter_by(email=q).all()
@@ -394,6 +407,7 @@ def create_app():
                     flash("No matches found", "info")
                 active_tab = "search"
 
+            # ===== Merge files =====
             elif action == "merge":
                 files = request.files.getlist("file_merge")
                 if not files or not files[0].filename:
@@ -429,6 +443,7 @@ def create_app():
                 }
                 active_tab = "merge"
 
+        # ---------- View Leads + filters (GET) ----------
         viewdb_leads = []
         if active_tab == 'viewdb':
             query = Lead.query
