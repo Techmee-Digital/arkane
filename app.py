@@ -23,6 +23,8 @@ load_dotenv()
 
 def create_app():
     app = Flask(__name__)
+    app.jinja_env.add_extension('jinja2.ext.do') # <-- ADD THIS LINE
+
 
     # ─── SECRET KEY ─────────────────────────────────────────────────────────
     secret = os.getenv('FLASK_SECRET_KEY')
@@ -443,9 +445,15 @@ def create_app():
                 }
                 active_tab = "merge"
 
-        # ---------- View Leads + filters (GET) ----------
-        viewdb_leads = []
+     # ---------- View Leads + filters (GET) with PAGINATION ----------
+        viewdb_pagination = None
         if active_tab == 'viewdb':
+            # Get the page number from URL, default to page 1
+            page = request.args.get('page', 1, type=int)
+            
+            # Set how many leads to show per page
+            per_page = 350
+
             query = Lead.query
             if request.args.get('enable_email') and request.args.get('filter_email'):
                 query = query.filter(Lead.email.ilike(f"%{request.args.get('filter_email')}%"))
@@ -455,7 +463,11 @@ def create_app():
                 query = query.filter(Lead.company.ilike(f"%{request.args.get('filter_company')}%"))
             if request.args.get('enable_source') and request.args.get('filter_source'):
                 query = query.filter(Lead.source_file.ilike(f"%{request.args.get('filter_source')}%"))
-            viewdb_leads = query.order_by(Lead.upload_date.desc()).all()
+            
+            # This is the key change: .paginate() instead of .all()
+            viewdb_pagination = query.order_by(Lead.upload_date.desc()).paginate(
+                page=page, per_page=per_page, error_out=False
+            )
 
         return render_template(
             "tools.html",
@@ -463,7 +475,8 @@ def create_app():
             dedupe=dedupe_ctx,
             search_results=search_results,
             merge=merge_ctx,
-            viewdb=viewdb_leads,
+            # Pass the whole pagination object to the template
+            pagination=viewdb_pagination, 
         )
 
     @app.route("/uploads/<path:filename>")
