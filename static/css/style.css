@@ -97,7 +97,6 @@ body {
     padding: 1.5rem;
     position: fixed; top: 0; left: 0;
     height: 100vh; display: flex; flex-direction: column;
-    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
     z-index: 10;
 }
 .main-content {
@@ -151,7 +150,7 @@ body {
 .sidebar-footer a:hover { color: var(--primary-accent); }
 
 /* --- Card Styles --- */
-.card { background-color: var(--bg-light-glass); border: 1px solid var(--border-color); border-radius: 0.75rem; margin-bottom: 1.5rem; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.card { background-color: var(--bg-light-glass); border: 1px solid var(--border-color); border-radius: 0.75rem; margin-bottom: 1.5rem; }
 .card-header { padding: 1.25rem 1.5rem; background-color: rgba(0,0,0,0.2); border-bottom: 1px solid var(--border-color); font-size: 1.1rem; font-weight: 600; color: var(--text-primary); }
 .card-body { padding: 1.5rem; }
 
@@ -222,7 +221,7 @@ body {
 .table-responsive { overflow-x: auto; }
 
 /* --- Flash Messages & Modals --- */
-.toast, .modal-content { background-color: var(--bg-light-glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--border-color); border-radius: 0.75rem; }
+.toast, .modal-content { background-color: var(--bg-light-glass); border: 1px solid var(--border-color); border-radius: 0.75rem; }
 .toast-container { position: fixed; top: 1.5rem; right: 1.5rem; z-index: 1100; }
 .toast-header { background-color: rgba(0,0,0,0.1); border-bottom: 1px solid var(--border-color); color: var(--text-primary); }
 .toast.bg-success { border-left: 4px solid var(--success); }
@@ -404,5 +403,22 @@ input[type="file"]:is(:hover, :focus, :focus-within, :active)::-webkit-file-uplo
 
 .card:hover .card-header::before {
     left: -20%;
+}
+/* Default (no blur) – fast and safe */
+.card,
+.sidebar,
+.modal-content {
+  background-color: rgba(35, 37, 45, 0.72);
+}
+
+/* Only apply real blur when the browser supports it */
+@supports (backdrop-filter: blur(6px)) or (-webkit-backdrop-filter: blur(6px)) {
+  .card,
+  .sidebar,
+  .modal-content {
+    backdrop-filter: blur(6px);            /* was 12px */
+    -webkit-backdrop-filter: blur(6px);
+    background-color: rgba(35, 37, 45, 0.55);
+  }
 }
 
