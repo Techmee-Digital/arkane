@@ -27,8 +27,8 @@
             } %}
             {% for tab_id, (title, icon_path) in nav_items.items() %}
             <li class="nav-item">
-                <a class="nav-link {% if active_tab == tab_id %}active{% endif %}" href="{{ url_for('tools', tab=tab_id, token=dedupe.token) }}">
-                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<a class="nav-link {% if active_tab == tab_id %}active{% endif %} {% if tab_id == 'viewdb' %}no-hover{% endif %}" href="{{ url_for('tools', tab=tab_id, token=dedupe.token) }}">
+                <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         {{ icon_path|safe }}
                     </svg>
                     <span class="nav-text">{{ title }}</span>

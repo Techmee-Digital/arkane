@@ -16,7 +16,152 @@ from flask_login import (
 )
 from dotenv import load_dotenv
 
-from model import db, Lead, User
+from model import db, Lead, User, Team
+import sqlalchemy as sa
+from sqlalchemy import inspect
+from sqlalchemy.exc import SQLAlchemyError
+
+
+
+def table_has_column(engine, table, column) -> bool:
+    insp = inspect(engine)
+    try:
+        return any(c['name'] == column for c in insp.get_columns(table))
+    except SQLAlchemyError:
+        return False
+def ensure_min_schema_and_seed():
+    """
+    Idempotent bootstrap for MariaDB:
+    - Add missing columns (users.team_id, users.role, leads.team_id)
+    - Add helpful indexes
+    - Create/ensure base team -> backfill NULL team_id
+    - Make team_id NOT NULL
+    - Best-effort add FKs
+    - Seed default teams/users
+    """
+    engine = db.engine
+
+    # 1) Add missing columns/indexes (start as NULL so we can backfill safely)
+    with engine.begin() as conn:
+        # users.team_id
+        if not table_has_column(engine, 'users', 'team_id'):
+            conn.execute(sa.text("ALTER TABLE users ADD COLUMN team_id INT NULL"))
+            try:
+                conn.execute(sa.text("CREATE INDEX ix_users_team_id ON users (team_id)"))
+            except Exception:
+                pass
+
+        # users.role
+        if not table_has_column(engine, 'users', 'role'):
+            conn.execute(sa.text("ALTER TABLE users ADD COLUMN role VARCHAR(32) DEFAULT 'member'"))
+
+        # leads.team_id
+        if not table_has_column(engine, 'leads', 'team_id'):
+            conn.execute(sa.text("ALTER TABLE leads ADD COLUMN team_id INT NULL"))
+            try:
+                conn.execute(sa.text("CREATE INDEX ix_leads_team_id ON leads (team_id)"))
+            except Exception:
+                pass
+
+        # composite index (team_id,email) for fast per-team lookups
+        try:
+            conn.execute(sa.text("CREATE INDEX ix_leads_team_email ON leads (team_id, email)"))
+        except Exception:
+            pass
+
+    # 2) Ensure a base team so we can backfill safely
+    campaign = Team.query.filter_by(name="Campaign").first()
+    if not campaign:
+        campaign = Team(name="Campaign")
+        db.session.add(campaign)
+        db.session.commit()
+
+    # 3) Backfill any NULL team_id to Campaign
+    with engine.begin() as conn:
+        conn.execute(sa.text("UPDATE users SET team_id = :tid WHERE team_id IS NULL"), {"tid": campaign.id})
+        conn.execute(sa.text("UPDATE leads SET team_id = :tid WHERE team_id IS NULL"), {"tid": campaign.id})
+
+    # 4) Make columns NOT NULL now that they’re populated
+    with engine.begin() as conn:
+        conn.execute(sa.text("ALTER TABLE users MODIFY team_id INT NOT NULL"))
+        conn.execute(sa.text("ALTER TABLE leads MODIFY team_id INT NOT NULL"))
+
+        # 5) Best-effort FKs (ignore if they already exist / different names)
+        try:
+            conn.execute(sa.text("""
+                ALTER TABLE users
+                ADD CONSTRAINT fk_users_team
+                FOREIGN KEY (team_id) REFERENCES teams(id)
+                ON UPDATE CASCADE ON DELETE RESTRICT
+            """))
+        except Exception:
+            pass
+
+        try:
+            conn.execute(sa.text("""
+                ALTER TABLE leads
+                ADD CONSTRAINT fk_leads_team
+                FOREIGN KEY (team_id) REFERENCES teams(id)
+                ON UPDATE CASCADE ON DELETE RESTRICT
+            """))
+        except Exception:
+            pass
+
+    # 6) Seed remaining teams/users (idempotent)
+    create_default_users()
+
+
+# put this near the top of app.py, after imports
+def create_default_users():
+    # Ensure teams
+    campaign_team = Team.query.filter_by(name="Campaign").first()
+    if not campaign_team:
+        campaign_team = Team(name="Campaign")
+        db.session.add(campaign_team)
+
+    lead_team = Team.query.filter_by(name="Leadgen").first()
+    if not lead_team:
+        lead_team = Team(name="Leadgen")
+        db.session.add(lead_team)
+
+    email_team = Team.query.filter_by(name="Email Marketing").first()
+    if not email_team:
+        email_team = Team(name="Email Marketing")
+        db.session.add(email_team)
+
+    db.session.commit()
+
+    # Campaign user (from env or defaults)
+    admin_user = os.getenv('ADMIN_USER', 'Campaign')
+    admin_pw = os.getenv('ADMIN_PASSWORD', 'Arkane31')
+    u = User.query.filter_by(username=admin_user).first()
+    if not u:
+        u = User(username=admin_user, team_id=campaign_team.id)
+        u.set_password(admin_pw)
+        db.session.add(u)
+    elif u.team_id is None:
+        u.team_id = campaign_team.id
+
+    # Leadgen user
+    u = User.query.filter_by(username="lead").first()
+    if not u:
+        u = User(username="lead", team_id=lead_team.id)
+        u.set_password("lead12")
+        db.session.add(u)
+    elif u.team_id is None:
+        u.team_id = lead_team.id
+
+    # Email Marketing user
+    u = User.query.filter_by(username="email").first()
+    if not u:
+        u = User(username="email", team_id=email_team.id)
+        u.set_password("email12")
+        db.session.add(u)
+    elif u.team_id is None:
+        u.team_id = email_team.id
+
+    db.session.commit()
+
 
 load_dotenv()
 
@@ -128,9 +273,11 @@ def create_app():
                 big.columns = [c.lower() for c in big.columns]
                 mask_dup = big.duplicated("email", keep=False)
                 existing = {
-                    e for (e,) in db.session.query(Lead.email)
-                    .filter(Lead.email.in_(big["email"])).all()
-                }
+                e for (e,) in db.session.query(Lead.email)
+                .filter(Lead.team_id == current_user.team_id,
+                        Lead.email.in_(big["email"])).all()
+            }
+
                 dup_set = set(big.loc[mask_dup, "email"]) | existing
 
                 rows = []
@@ -140,15 +287,17 @@ def create_app():
                     d["duplicate"] = is_dup
                     if is_dup:
                         if r["email"] in existing:
-                            lead = (Lead.query.filter_by(email=r["email"])
-                                    .order_by(Lead.upload_date.desc()).first())
+                            lead = (Lead.query.filter_by(email=r["email"], team_id=current_user.team_id)
+                            .order_by(Lead.upload_date.desc()).first())
+
                             camp = lead.campaign or ""
                             qtr = lead.quarter or ""
                             d["origin"] = f"DB: {camp}/{qtr}" if (camp or qtr) else "DB"
                         else:
                             d["origin"] = "Current Sheet"
                     else:
-                        d["origin"] = ""
+                        d["origin"] = "Current Sheet"
+
                     rows.append(d)
 
                 dedupe_ctx = {
@@ -180,7 +329,7 @@ def create_app():
                 updated_count = 0
                 for lead_id in selected_ids:
                     lead = db.session.get(Lead, lead_id)
-                    if not lead:
+                    if not lead or lead.team_id != current_user.team_id: 
                         continue
                     lead.email       = (request.form.get(f"email_{lead_id}", lead.email) or "").strip().lower()
                     lead.company     = request.form.get(f"company_{lead_id}", lead.company) or ""
@@ -210,7 +359,10 @@ def create_app():
                     flash('No leads were selected to delete.', 'warning')
                     return redirect(url_for("tools", tab="viewdb"))
 
-                deleted = Lead.query.filter(Lead.id.in_(selected_ids)).delete(synchronize_session=False)
+                deleted = Lead.query.filter(
+                    Lead.id.in_(selected_ids),
+                    Lead.team_id == current_user.team_id
+                ).delete(synchronize_session=False)
                 db.session.commit()
                 flash(f"{deleted} selected record(s) deleted.", "success")
                 return redirect(url_for("tools", tab="viewdb"))
@@ -225,7 +377,11 @@ def create_app():
                 if not src:
                     flash("Source name not found.", "warning")
                 else:
-                    deleted = Lead.query.filter(Lead.source_file == src).delete(synchronize_session=False)
+                    deleted = Lead.query.filter(
+                        Lead.source_file == src,
+                        Lead.team_id == current_user.team_id
+                    ).delete(synchronize_session=False)
+
                     db.session.commit()
                     flash(f"Deleted {deleted} lead(s) from source '{src}'", "success")
                 return redirect(url_for("tools", tab="viewdb"))
@@ -235,7 +391,7 @@ def create_app():
                 try:   
                     print("DOWNLOAD FORM DATA:", dict(request.form)) 
 
-                    query = Lead.query
+                    query = Lead.query.filter(Lead.team_id == current_user.team_id)
                     filename = "leads.xlsx"
               
                     if action == 'download_all':
@@ -259,6 +415,7 @@ def create_app():
                         if request.form.get('enable_source') and request.form.get('filter_source'):
                             query = query.filter(Lead.source_file.ilike(f"%{request.form.get('filter_source')}%"))
                         filename = "filtered_leads.xlsx"
+
 
                     leads = query.order_by(Lead.upload_date.desc()).all()
                     if not leads:
@@ -325,8 +482,14 @@ def create_app():
 
                 big = pd.concat(dfs, ignore_index=True)
                 mask_dup = big.duplicated("email", keep=False)
-                existing = {e for (e,) in db.session.query(Lead.email)
-                            .filter(Lead.email.in_(big["email"])).all()}
+                existing = {
+                    e for (e,) in db.session.query(Lead.email)
+                    .filter(
+                        Lead.team_id == current_user.team_id,   # ← scope to logged-in team
+                        Lead.email.in_(big["email"])
+                    ).all()
+                }
+
                 dup_set = set(big.loc[mask_dup, "email"]) | existing
 
                 rows = []
@@ -336,16 +499,23 @@ def create_app():
                     d["duplicate"] = is_dup
                     if is_dup:
                         if r["email"] in existing:
-                            lead = (Lead.query.filter_by(email=r["email"])
-                                    .order_by(Lead.upload_date.desc()).first())
+                            lead = (
+                                Lead.query.filter_by(
+                                    email=r["email"], 
+                                    team_id=current_user.team_id  # ← scope here too
+                                )
+                                .order_by(Lead.upload_date.desc())
+                                .first()
+                            )
                             camp = lead.campaign or ""
                             qtr = lead.quarter or ""
                             d["origin"] = f"DB: {camp}/{qtr}" if (camp or qtr) else "DB"
                         else:
                             d["origin"] = "Current Sheet"
                     else:
-                        d["origin"] = ""
+                        d["origin"] = "Current Sheet"
                     rows.append(d)
+
 
                 cache_path = Path(current_app.config['UPLOAD_FOLDER']) / f"_cache_{token}.parquet"
                 big.to_parquet(cache_path)
@@ -375,8 +545,14 @@ def create_app():
                 if "exclusions" not in df.columns:
                     df["exclusions"] = ""
 
-                existing = {e for (e,) in db.session.query(Lead.email)
-                            .filter(Lead.email.in_(df["email"])).all()}
+                existing = {
+        e for (e,) in db.session.query(Lead.email)
+        .filter(
+            Lead.team_id == current_user.team_id,   # ← team scope
+            Lead.email.in_(df["email"])
+        ).all()
+    }
+
                 mask_dup = df.duplicated("email", keep=False)
                 dup_set = set(df.loc[mask_dup, "email"]) | existing
 
@@ -387,13 +563,15 @@ def create_app():
                     if not do:
                         continue
                     lead = Lead(
-                        email=email,
-                        company=r.get("company", ""),
-                        quarter=r.get("quarter", ""),
-                        campaign=r.get("campaign", ""),
-                        source_file=r.get("__src__", ""),
-                        exclusions=r.get("exclusions", "")
-                    )
+                    email=email,
+                    company=r.get("company", ""),
+                    quarter=r.get("quarter", ""),
+                    campaign=r.get("campaign", ""),
+                    source_file=r.get("__src__", ""),
+                    exclusions=r.get("exclusions", ""),
+                    team_id=current_user.team_id        # ★ ADD THIS
+                )
+
                     db.session.add(lead)
                     saved += 1
 
@@ -404,7 +582,7 @@ def create_app():
             # ===== Exact email search =====
             elif action == "search":
                 q = (request.form.get("search_email", "") or "").strip().lower()
-                search_results = Lead.query.filter_by(email=q).all()
+                search_results = Lead.query.filter_by(email=q, team_id=current_user.team_id).all()
                 if not search_results:
                     flash("No matches found", "info")
                 active_tab = "search"
@@ -452,9 +630,9 @@ def create_app():
             page = request.args.get('page', 1, type=int)
             
             # Set how many leads to show per page
-            per_page = 350
+            per_page = 100
 
-            query = Lead.query
+            query = Lead.query.filter(Lead.team_id == current_user.team_id)  # base team scope
             if request.args.get('enable_email') and request.args.get('filter_email'):
                 query = query.filter(Lead.email.ilike(f"%{request.args.get('filter_email')}%"))
             if request.args.get('enable_campaign') and request.args.get('filter_campaign'):
@@ -463,7 +641,8 @@ def create_app():
                 query = query.filter(Lead.company.ilike(f"%{request.args.get('filter_company')}%"))
             if request.args.get('enable_source') and request.args.get('filter_source'):
                 query = query.filter(Lead.source_file.ilike(f"%{request.args.get('filter_source')}%"))
-            
+
+
             # This is the key change: .paginate() instead of .all()
             viewdb_pagination = query.order_by(Lead.upload_date.desc()).paginate(
                 page=page, per_page=per_page, error_out=False
@@ -484,19 +663,12 @@ def create_app():
     def uploaded_file(filename):
         return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-    def create_default_user():
-        admin_user = os.getenv('ADMIN_USER', 'Campaign')
-        admin_pw = os.getenv('ADMIN_PASSWORD', 'Arkane31')
-        if not User.query.filter_by(username=admin_user).first():
-            u = User(username=admin_user)
-            u.set_password(admin_pw)
-            db.session.add(u)
-            db.session.commit()
-            app.logger.info(f"Created default user '{admin_user}'")
-
+    # --- BOOTSTRAP: create tables, then apply minimal schema + seed (idempotent)
     with app.app_context():
+        # Create any missing tables (never drops anything)
         db.create_all()
-        create_default_user()
+        # Add missing columns/indexes, backfill team_id, add FKs, seed default teams/users
+        ensure_min_schema_and_seed()
 
     return app
 
@@ -508,3 +680,4 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", 5000)),
         debug=True
     )
+
