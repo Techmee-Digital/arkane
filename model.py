@@ -38,7 +38,6 @@ class Lead(db.Model):
         db.Index("ix_leads_team_email", "team_id", "email"),
     )
 
-
 class User(UserMixin, db.Model):
     __tablename__ = "users"
 
