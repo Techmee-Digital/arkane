@@ -422,11 +422,11 @@ input[type="file"]:is(:hover, :focus, :focus-within, :active)::-webkit-file-uplo
   }
 }
 
-/* --- Rule to disable hover on the Database Leads table header --- */
-.card.no-header-hover:hover .card-header::before {
-  left: -141%; /* This stops the animation */
-} 
 /* Make form labels pure white */
 .form-label {
     color: #ffffff;
+}
+/* --- Completely remove holographic effect from Database Leads header --- */
+.card.no-header-hover .card-header::before {
+  display: none;
 }
