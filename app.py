@@ -482,34 +482,38 @@ def create_app():
 
                 big = pd.concat(dfs, ignore_index=True)
                 mask_dup = big.duplicated("email", keep=False)
-                existing = {
-                    e for (e,) in db.session.query(Lead.email)
-                    .filter(
-                        Lead.team_id == current_user.team_id,   # ← scope to logged-in team
-                        Lead.email.in_(big["email"])
-                    ).all()
-                }
+              # Get all leads from the DB that match emails in the uploaded file
+                matching_leads = Lead.query.filter(
+                    Lead.team_id == current_user.team_id,
+                    Lead.email.in_(big["email"])
+                ).order_by(Lead.email, Lead.upload_date.desc()).all()
+
+                # Create a map of email -> latest lead object
+                existing_leads_map = {}
+                for lead in matching_leads:
+                    if lead.email not in existing_leads_map:
+                        existing_leads_map[lead.email] = lead
+
+                existing = set(existing_leads_map.keys())
 
                 dup_set = set(big.loc[mask_dup, "email"]) | existing
 
                 rows = []
                 for _, r in big.iterrows():
                     d = r.to_dict()
+                    d["upload_date"] = "" # Default to empty string for all rows
                     is_dup = r["email"] in dup_set
                     d["duplicate"] = is_dup
+
                     if is_dup:
-                        if r["email"] in existing:
-                            lead = (
-                                Lead.query.filter_by(
-                                    email=r["email"], 
-                                    team_id=current_user.team_id  # ← scope here too
-                                )
-                                .order_by(Lead.upload_date.desc())
-                                .first()
-                            )
+                        if r["email"] in existing_leads_map:
+                            # Get the lead object from our map (no new DB query)
+                            lead = existing_leads_map[r["email"]]
                             camp = lead.campaign or ""
                             qtr = lead.quarter or ""
                             d["origin"] = f"DB: {camp}/{qtr}" if (camp or qtr) else "DB"
+                            # Add the formatted upload date to our dictionary
+                            d["upload_date"] = lead.upload_date.strftime('%Y-%m-%d') if lead.upload_date else ''
                         else:
                             d["origin"] = "Current Sheet"
                     else:
