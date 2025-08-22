@@ -61,6 +61,13 @@ body {
     overflow: hidden;
 }
 
+/* --- ADD THESE LINES TO HIDE THE BACKGROUND --- */
+.stars, 
+.shooting-star {
+    display: none !important;
+}
+/* --------------------------------------------- */
+
 /* Remove the rain entirely */
 .lines { display: none !important; }
 
