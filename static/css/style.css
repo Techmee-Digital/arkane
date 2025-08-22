@@ -426,3 +426,7 @@ input[type="file"]:is(:hover, :focus, :focus-within, :active)::-webkit-file-uplo
 .card.no-header-hover:hover .card-header::before {
   left: -141%; /* This stops the animation */
 } 
+/* Make form labels pure white */
+.form-label {
+    color: #ffffff;
+}
