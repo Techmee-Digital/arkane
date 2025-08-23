@@ -508,26 +508,40 @@ def create_app():
                 token = uuid.uuid4().hex
                 dfs, srcs = [], []
                 for f in files:
-                    if not allowed_file(f.filename):
-                        flash(f"Unsupported file type: {f.filename}", "warning")
-                        continue
-                    fn = secure_filename(f.filename)
-                    path = Path(current_app.config['UPLOAD_FOLDER']) / f"{token}_{fn}"
-                    f.save(path)
+                 if not allowed_file(f.filename):
+                    flash(f"Unsupported file type: {f.filename}", "warning")
+                    continue
 
-                    df = pd.read_excel(path, engine="openpyxl")
-                    col = find_email_col(df.columns)
-                    df = df.rename(columns={col: "Email"})
-                    df["Email"] = df["Email"].map(lambda s: str(s).strip().lower())
-                    df["__src__"] = fn
+                fn = secure_filename(f.filename)
+                path = Path(current_app.config['UPLOAD_FOLDER']) / f"{token}_{fn}"
+                f.save(path)
 
-                    df.columns = [str(c).strip().lower() for c in df.columns]
-                    if "campaign name" in df.columns:
-                        df.rename(columns={"campaign name": "campaign"}, inplace=True)
-                    if "exclusions" not in df.columns:
-                        df["exclusions"] = ""
-                    dfs.append(df)
-                    srcs.append(fn)
+                df = pd.read_excel(path, engine="openpyxl")
+
+                # Normalize email column
+                col = find_email_col(df.columns)
+                df = df.rename(columns={col: "Email"})
+                df["Email"] = df["Email"].map(lambda s: str(s).strip().lower())
+
+                # Source marker
+                df["__src__"] = fn
+
+                # Standardize headers
+                df.columns = [str(c).strip().lower() for c in df.columns]
+                if "campaign name" in df.columns:
+                    df.rename(columns={"campaign name": "campaign"}, inplace=True)
+                if "exclusions" not in df.columns:
+                    df["exclusions"] = ""
+
+                # Replace NaN with empty strings for string-y columns
+                for colname in ["company", "quarter", "campaign", "__src__", "exclusions"]:
+                    if colname in df.columns:
+                        df[colname] = df[colname].where(pd.notnull(df[colname]), "")
+
+                # ✅ Always append here (not inside the if-block)
+                dfs.append(df)
+                srcs.append(fn)
+
 
                 if not dfs:
                     flash("No valid Excel files uploaded", "warning")
@@ -614,7 +628,8 @@ def create_app():
                     df.rename(columns={"campaign name": "campaign"}, inplace=True)
                 if "exclusions" not in df.columns:
                     df["exclusions"] = ""
-
+                    
+                df = df.where(pd.notnull(df), "")
                 existing = {
         e for (e,) in db.session.query(Lead.email)
         .filter(
