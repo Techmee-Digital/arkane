@@ -87,6 +87,48 @@
                         {% endfor %}
                     </tbody>
                 </table>
+                <!-- Duplicate Checker Pagination -->
+{% if dedupe_pagination %}
+  <div class="card-footer d-flex justify-content-center">
+    <nav aria-label="Duplicate results pages">
+      <ul class="pagination mb-0">
+        <!-- Prev -->
+        <li class="page-item {% if not dedupe_pagination.has_prev %}disabled{% endif %}">
+          <a class="page-link"
+             href="{{ url_for('tools',
+                              tab='duplicate',
+                              token=dedupe.token,
+                              dpage=dedupe_pagination.prev_num) }}">&laquo;</a>
+        </li>
+
+        <!-- Page numbers -->
+        {% for page_num in dedupe_pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+          {% if page_num %}
+            <li class="page-item {% if dedupe_pagination.page == page_num %}active{% endif %}">
+              <a class="page-link"
+                 href="{{ url_for('tools',
+                                  tab='duplicate',
+                                  token=dedupe.token,
+                                  dpage=page_num) }}">{{ page_num }}</a>
+            </li>
+          {% else %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+          {% endif %}
+        {% endfor %}
+
+        <!-- Next -->
+        <li class="page-item {% if not dedupe_pagination.has_next %}disabled{% endif %}">
+          <a class="page-link"
+             href="{{ url_for('tools',
+                              tab='duplicate',
+                              token=dedupe.token,
+                              dpage=dedupe_pagination.next_num) }}">&raquo;</a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+{% endif %}
+
             </div>
         </div>
       </div>

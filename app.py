@@ -164,6 +164,43 @@ def create_default_users():
 
 
 load_dotenv()
+ # --- Simple pagination helper (mimics Flask-SQLAlchemy paginate bits) ---
+class SimplePagination:
+    def __init__(self, page, per_page, total, items):
+        self.page = page
+        self.per_page = per_page
+        self.total = total
+        self.items = items
+
+    @property
+    def has_prev(self):
+        return self.page > 1
+
+    @property
+    def has_next(self):
+        return self.page * self.per_page < self.total
+
+    @property
+    def prev_num(self):
+        return self.page - 1
+
+    @property
+    def next_num(self):
+        return self.page + 1
+
+    def iter_pages(self, left_edge=1, right_edge=1, left_current=2, right_current=2):
+        last = 0
+        total_pages = (self.total + self.per_page - 1) // self.per_page
+        for num in range(1, total_pages + 1):
+            if (
+                num <= left_edge
+                or (num >= self.page - left_current and num <= self.page + right_current)
+                or num > total_pages - right_edge
+            ):
+                if last + 1 != num:
+                    yield None
+                yield num
+                last = num
 
 
 def create_app():
@@ -262,6 +299,7 @@ def create_app():
         # default contexts
         dedupe_ctx = {"token": "", "rows": [], "fields": [], "dup_set": set(),
                       "count_all": 0, "count_dup": 0, "sources": ""}
+        dedupe_pagination = None  # <--- add this
         search_results = None
         merge_ctx = {}
 
@@ -309,6 +347,21 @@ def create_app():
                     "count_dup": sum(1 for r in rows if r["duplicate"]),
                     "sources": ", ".join(big["__src__"].unique())
                 }
+                # ---- DUPLICATE CHECKER PAGINATION (GET with token) ----
+        dpage = request.args.get('dpage', 1, type=int)
+        dper_page = 100  # adjust if you want different page size
+        dtotal = len(dedupe_ctx["rows"])
+        start = (dpage - 1) * dper_page
+        end = start + dper_page
+        page_items = dedupe_ctx["rows"][start:end]
+
+        dedupe_pagination = SimplePagination(
+            page=dpage, per_page=dper_page, total=dtotal, items=page_items
+        )
+
+        # replace rows shown in this request with just the current page
+        dedupe_ctx["rows"] = page_items
+
 
         # ---------- POST (all actions) ----------
         if request.method == 'POST':
@@ -533,6 +586,19 @@ def create_app():
                     "count_dup": sum(1 for r in rows if r["duplicate"]),
                     "sources": ", ".join(srcs)
                 }
+                # ---- DUPLICATE CHECKER PAGINATION (POST dedupe) ----
+                dpage = request.args.get('dpage', 1, type=int)
+                dper_page = 100
+                dtotal = len(dedupe_ctx["rows"])
+                start = (dpage - 1) * dper_page
+                end = start + dper_page
+                page_items = dedupe_ctx["rows"][start:end]
+
+                dedupe_pagination = SimplePagination(
+                    page=dpage, per_page=dper_page, total=dtotal, items=page_items
+                )
+
+                dedupe_ctx["rows"] = page_items
 
             # ===== Save (all or duplicates) =====
             elif action in ("save_all", "save_dup"):
@@ -660,6 +726,7 @@ def create_app():
             merge=merge_ctx,
             # Pass the whole pagination object to the template
             pagination=viewdb_pagination, 
+            dedupe_pagination=dedupe_pagination, 
         )
 
     @app.route("/uploads/<path:filename>")
