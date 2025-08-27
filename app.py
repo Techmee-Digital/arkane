@@ -499,6 +499,7 @@ def create_app():
                     return redirect(url_for('tools', tab='viewdb'))
 
             # ===== Dedupe upload =====
+             # ===== Dedupe upload =====
             elif action == "dedupe":
                 files = request.files.getlist("file_upload")
                 if not files or not files[0].filename:
@@ -507,49 +508,58 @@ def create_app():
 
                 token = uuid.uuid4().hex
                 dfs, srcs = [], []
+                # START: This loop should ONLY read files and add them to the 'dfs' list
                 for f in files:
-                 if not allowed_file(f.filename):
-                    flash(f"Unsupported file type: {f.filename}", "warning")
-                    continue
+                    if not allowed_file(f.filename):
+                        flash(f"Unsupported file type: {f.filename}", "warning")
+                        continue
 
-                fn = secure_filename(f.filename)
-                path = Path(current_app.config['UPLOAD_FOLDER']) / f"{token}_{fn}"
-                f.save(path)
+                    fn = secure_filename(f.filename)
+                    # Note: You can save the file directly from memory without saving to disk first
+                    # but for simplicity, we'll keep your original logic.
+                    path = Path(current_app.config['UPLOAD_FOLDER']) / f"{token}_{fn}"
+                    f.save(path)
 
-                df = pd.read_excel(path, engine="openpyxl")
+                    df = pd.read_excel(path, engine="openpyxl")
 
-                # Normalize email column
-                col = find_email_col(df.columns)
-                df = df.rename(columns={col: "Email"})
-                df["Email"] = df["Email"].map(lambda s: str(s).strip().lower())
+                    # Normalize email column
+                    try:
+                        col = find_email_col(df.columns)
+                    except KeyError as e:
+                        flash(f"Error in file '{fn}': {e}", "danger")
+                        continue # Skip this file and proceed to the next
 
-                # Source marker
-                df["__src__"] = fn
+                    df = df.rename(columns={col: "Email"})
+                    df["Email"] = df["Email"].map(lambda s: str(s).strip().lower())
 
-                # Standardize headers
-                df.columns = [str(c).strip().lower() for c in df.columns]
-                if "campaign name" in df.columns:
-                    df.rename(columns={"campaign name": "campaign"}, inplace=True)
-                if "exclusions" not in df.columns:
-                    df["exclusions"] = ""
+                    # Source marker
+                    df["__src__"] = fn
 
-                # Replace NaN with empty strings for string-y columns
-                for colname in ["company", "quarter", "campaign", "__src__", "exclusions"]:
-                    if colname in df.columns:
-                        df[colname] = df[colname].where(pd.notnull(df[colname]), "")
+                    # Standardize headers
+                    df.columns = [str(c).strip().lower() for c in df.columns]
+                    if "campaign name" in df.columns:
+                        df.rename(columns={"campaign name": "campaign"}, inplace=True)
+                    if "exclusions" not in df.columns:
+                        df["exclusions"] = ""
 
-                # ✅ Always append here (not inside the if-block)
-                dfs.append(df)
-                srcs.append(fn)
+                    # Replace NaN with empty strings for string-y columns
+                    for colname in ["company", "quarter", "campaign", "__src__", "exclusions"]:
+                        if colname in df.columns:
+                            df[colname] = df[colname].where(pd.notnull(df[colname]), "")
 
+                    dfs.append(df)
+                    srcs.append(fn)
+                # END: The for loop is now finished.
 
+                # <<< FIX: THE FOLLOWING LOGIC IS NOW DE-INDENTED >>>
+                # It runs once *after* all files have been read into the 'dfs' list.
                 if not dfs:
-                    flash("No valid Excel files uploaded", "warning")
+                    flash("No valid Excel files were processed.", "warning")
                     return redirect(url_for("tools", tab="duplicate"))
 
                 big = pd.concat(dfs, ignore_index=True)
                 mask_dup = big.duplicated("email", keep=False)
-              # Get all leads from the DB that match emails in the uploaded file
+                # Get all leads from the DB that match emails in the uploaded file
                 matching_leads = Lead.query.filter(
                     Lead.team_id == current_user.team_id,
                     Lead.email.in_(big["email"])
@@ -613,6 +623,7 @@ def create_app():
                 )
 
                 dedupe_ctx["rows"] = page_items
+
 
             # ===== Save (all or duplicates) =====
             elif action in ("save_all", "save_dup"):
