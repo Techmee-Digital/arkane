@@ -12,10 +12,10 @@ pipeline {
     GITHUB_CREDS_ID = '63482712-9185-4fca-b8ba-84649d66a380'
 
     // secret file credential path for env
-    ENVFILE         = credentials('env_acumensite')
+    ENVFILE         = credentials('env_arkane')
 
     // files to move from TEMP to the permanent directory
-    DEPLOY_FILES    = 'docker-compose.prod.yml .env .env.local credentials.json'
+    DEPLOY_FILES    = 'docker-compose.prod.yml .env  credentials.json'
   }
 
   stages {
