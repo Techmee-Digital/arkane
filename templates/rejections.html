@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="content-wrapper">
+  <div class="card">
+    <div class="card-header">Add New Rejection</div>
+    <div class="card-body">
+      <form method="POST" class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Email</label>
+          <input type="email" name="email" class="form-control" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Campaign Name</label>
+          <input type="text" name="campaign" class="form-control">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Company</label>
+          <input type="text" name="company" class="form-control">
+        </div>
+        <div class="col-md-12">
+          <label class="form-label">Reason</label>
+          <textarea name="reason" class="form-control" rows="3" required></textarea>
+        </div>
+        <div class="col-12 text-end">
+          <button type="submit" class="btn btn-success btn-liquid">
+            <span class="btn-text">Save Rejection</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

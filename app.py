@@ -39,11 +39,14 @@ def ensure_min_schema_and_seed():
     - Best-effort add FKs
     - Seed default teams/users
     """
-    engine = db.engine
+    engine = db.engine  # ✅ must be defined first
 
-    # 1) Add missing columns/indexes (start as NULL so we can backfill safely)
     with engine.begin() as conn:
-        # users.team_id
+        # --- Add the new column "reason" if missing ---
+        if not table_has_column(engine, 'leads', 'reason'):
+            conn.execute(sa.text("ALTER TABLE leads ADD COLUMN reason VARCHAR(500) DEFAULT ''"))
+
+        # --- users.team_id ---
         if not table_has_column(engine, 'users', 'team_id'):
             conn.execute(sa.text("ALTER TABLE users ADD COLUMN team_id INT NULL"))
             try:
@@ -51,11 +54,11 @@ def ensure_min_schema_and_seed():
             except Exception:
                 pass
 
-        # users.role
+        # --- users.role ---
         if not table_has_column(engine, 'users', 'role'):
             conn.execute(sa.text("ALTER TABLE users ADD COLUMN role VARCHAR(32) DEFAULT 'member'"))
 
-        # leads.team_id
+        # --- leads.team_id ---
         if not table_has_column(engine, 'leads', 'team_id'):
             conn.execute(sa.text("ALTER TABLE leads ADD COLUMN team_id INT NULL"))
             try:
@@ -63,30 +66,30 @@ def ensure_min_schema_and_seed():
             except Exception:
                 pass
 
-        # composite index (team_id,email) for fast per-team lookups
+        # --- composite index (team_id,email) ---
         try:
             conn.execute(sa.text("CREATE INDEX ix_leads_team_email ON leads (team_id, email)"))
         except Exception:
             pass
 
-    # 2) Ensure a base team so we can backfill safely
+    # --- Ensure base team so we can backfill safely ---
     campaign = Team.query.filter_by(name="Campaign").first()
     if not campaign:
         campaign = Team(name="Campaign")
         db.session.add(campaign)
         db.session.commit()
 
-    # 3) Backfill any NULL team_id to Campaign
+    # --- Backfill any NULL team_id to Campaign ---
     with engine.begin() as conn:
         conn.execute(sa.text("UPDATE users SET team_id = :tid WHERE team_id IS NULL"), {"tid": campaign.id})
         conn.execute(sa.text("UPDATE leads SET team_id = :tid WHERE team_id IS NULL"), {"tid": campaign.id})
 
-    # 4) Make columns NOT NULL now that they’re populated
+    # --- Make columns NOT NULL ---
     with engine.begin() as conn:
         conn.execute(sa.text("ALTER TABLE users MODIFY team_id INT NOT NULL"))
         conn.execute(sa.text("ALTER TABLE leads MODIFY team_id INT NOT NULL"))
 
-        # 5) Best-effort FKs (ignore if they already exist / different names)
+        # --- Add FKs safely ---
         try:
             conn.execute(sa.text("""
                 ALTER TABLE users
@@ -107,7 +110,7 @@ def ensure_min_schema_and_seed():
         except Exception:
             pass
 
-    # 6) Seed remaining teams/users (idempotent)
+    # --- Seed default users and teams ---
     create_default_users()
 
 
@@ -288,6 +291,59 @@ def create_app():
     def logout():
         logout_user()
         return redirect(url_for('login'))
+    @app.route('/rejections', methods=['GET', 'POST'])
+    @login_required
+    def rejections():
+        if request.method == 'POST':
+            email = request.form.get('email', '').strip().lower()
+            campaign = request.form.get('campaign', '').strip()
+            company = request.form.get('company', '').strip()
+            reason = request.form.get('reason', '').strip()
+
+            if not email or not reason:
+                flash("Email and reason are required.", "warning")
+            else:
+                from model import Rejection
+                new_r = Rejection(
+                    email=email,
+                    campaign=campaign,
+                    company=company,
+                    reason=reason,
+                    team_id=current_user.team_id
+                )
+            db.session.add(new_r)
+            db.session.commit()
+
+            # --- Update or create matching lead ---
+            lead = Lead.query.filter_by(email=email, team_id=current_user.team_id).first()
+            if not lead:
+                lead = Lead(
+                    email=email,
+                    company=company,
+                    campaign=campaign,
+                    reason=reason,
+                    team_id=current_user.team_id
+                )
+                db.session.add(lead)
+            else:
+                lead.reason = reason
+                lead.company = company or lead.company
+                lead.campaign = campaign or lead.campaign
+
+            db.session.commit()
+            flash("Rejection saved and linked to Leads successfully.", "success")
+
+            return redirect(url_for('rejections'))
+
+        # Fetch existing rejections
+        from model import Rejection
+        all_rejections = (
+            Rejection.query.filter_by(team_id=current_user.team_id)
+            .order_by(Rejection.created_at.desc())
+            .all()
+        )
+        return render_template('rejections.html', rejections=all_rejections)
+
 
     # ─── Main tool route ───────────────────────────────────────────
     @app.route('/', methods=['GET', 'POST'])
@@ -440,7 +496,8 @@ def create_app():
                 return redirect(url_for("tools", tab="viewdb"))
 
             # ===== Download actions (no password required) =====
-            elif action in ['download_selected', 'download_all', 'download_filtered']:
+            elif action in ['download_selected', 'download_all', 'download_filtered', 'download_rejected']:
+
                 try:   
                     print("DOWNLOAD FORM DATA:", dict(request.form)) 
 
@@ -457,6 +514,10 @@ def create_app():
                             return redirect(url_for('tools', tab='viewdb'))
                         query = query.filter(Lead.id.in_(selected_ids))
                         filename = "selected_leads.xlsx"
+                        if action == 'download_rejected':
+                            query = query.filter(Lead.reason != "")
+                            filename = "rejected_leads.xlsx"
+
 
                     elif action == 'download_filtered':
                         if request.form.get('enable_email') and request.form.get('filter_email'):
@@ -737,6 +798,9 @@ def create_app():
                 query = query.filter(Lead.company.ilike(f"%{request.args.get('filter_company')}%"))
             if request.args.get('enable_source') and request.args.get('filter_source'):
                 query = query.filter(Lead.source_file.ilike(f"%{request.args.get('filter_source')}%"))
+            if request.args.get('enable_reason') and request.args.get('filter_reason'):
+                query = query.filter(Lead.reason.ilike(f"%{request.args.get('filter_reason')}%"))
+
 
 
             # This is the key change: .paginate() instead of .all()

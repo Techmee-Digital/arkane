@@ -28,6 +28,7 @@ class Lead(db.Model):
     campaign = db.Column(db.String(100), default="")
     source_file = db.Column(db.String(255), default="")
     exclusions = db.Column(db.String(255), default="")
+    reason = db.Column(db.String(500), default="")  # ← NEW LINE
     upload_date = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     # ★ Multi-tenancy: every lead belongs to a team
@@ -37,6 +38,23 @@ class Lead(db.Model):
         # Useful for fast per-team duplicate checks/lookups by email
         db.Index("ix_leads_team_email", "team_id", "email"),
     )
+class Rejection(db.Model):
+    __tablename__ = "rejections"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    email = db.Column(db.String(255), nullable=False, index=True)
+    company = db.Column(db.String(255), default="")
+    campaign = db.Column(db.String(255), default="")
+    reason = db.Column(db.String(500), default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Link to team (multi-tenancy)
+    team_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index("ix_rejections_team_email", "team_id", "email"),
+    )
+
 
 class User(UserMixin, db.Model):
     __tablename__ = "users"

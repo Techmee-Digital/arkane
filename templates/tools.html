@@ -246,7 +246,15 @@
       <form method="GET" class="needs-loading-spinner">
         <input type="hidden" name="tab" value="viewdb">
         <div class="row g-3 align-items-center">
-            {% set filters = [('email', 'Email'), ('campaign', 'Campaign'), ('company', 'Company'), ('source', 'Source')] %}
+{% set filters = [
+    ('email', 'Email'),
+    ('campaign', 'Campaign'),
+    ('company', 'Company'),
+    ('source', 'Source'),
+    ('reason', 'Reason')
+] %}
+
+
             {% for name, label in filters %}
             <div class="col-md-6 col-lg-3 d-flex align-items-center">
                 <div class="form-check form-switch me-2">
@@ -294,6 +302,12 @@
                  <button type="button" class="btn btn-sm btn-info btn-liquid" id="btnDownloadFiltered"><span class="btn-text">Download Filtered</span></button>
                 <button type="button" class="btn btn-sm btn-info btn-liquid" id="btnDownloadAll"><span class="btn-text">Download All</span></button>
             </div>
+            <div class="btn-group">
+    <button type="button" class="btn btn-sm btn-warning btn-liquid" id="btnDownloadRejected">
+        <span class="btn-text">Download Rejected</span>
+    </button>
+</div>
+
             {% if request.values.get('enable_source') and request.values.filter_source %}
             <button type="button" class="btn btn-sm btn-outline-danger btn-liquid" data-bs-toggle="modal" data-bs-target="#passwordModal" data-action="delete_source_results"><span class="btn-text">Delete All From Source</span></button>
             <input type="hidden" name="source_to_delete" value="{{ request.values.filter_source }}">
@@ -312,8 +326,9 @@
                 <thead>
                     <tr>
                         <th style="width: 3%;"><input type="checkbox" class="form-check-input" id="select_all"></th>
-                        <th>Email</th><th>Company</th><th>Quarter</th><th>Campaign</th><th>Source File</th><th>Exclusions</th><th>Uploaded</th>
-                    </tr>
+                       <th>Email</th><th>Company</th><th>Quarter</th><th>Campaign</th><th>Source File</th><th>Exclusions</th><th>Reason</th><th>Uploaded</th>
+
+                      </tr>
                 </thead>
                 <tbody>
                       {% for l in pagination.items %}
@@ -325,6 +340,8 @@
                         <td><input name="campaign_{{ l.id }}" value="{{ l.campaign or '' }}" readonly class="form-control-plaintext form-control-sm lead-input"></td>
                         <td><input name="source_file_{{ l.id }}" value="{{ l.source_file or '' }}" readonly class="form-control-plaintext form-control-sm lead-input"></td>
                         <td><input name="exclusions_{{ l.id }}" value="{{ l.exclusions or '' }}" readonly class="form-control-plaintext form-control-sm lead-input"></td>
+                        <td><input name="reason_{{ l.id }}" value="{{ l.reason or '' }}" readonly class="form-control-plaintext form-control-sm lead-input"></td>
+
                         <td>{{ l.upload_date.strftime('%Y-%m-%d') }}</td>
                     </tr>
                     {% endfor %}
@@ -535,6 +552,8 @@ document.addEventListener('DOMContentLoaded', function() {
   btnDownloadSel?.addEventListener('click', (e) => submitAction('download_selected', e.currentTarget));
   btnDownloadAll?.addEventListener('click', (e) => submitAction('download_all', e.currentTarget));
   btnDownloadFilt?.addEventListener('click', (e) => submitAction('download_filtered', e.currentTarget));
+  document.getElementById('btnDownloadRejected')?.addEventListener('click', (e) => submitAction('download_rejected', e.currentTarget));
+
 
   // Generic "loading" for forms that actually use a submit button
   const forms = document.querySelectorAll('.needs-loading-spinner');
