@@ -1,0 +1,22 @@
+services:
+  arkane-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: arkane-web-dev
+    ports:
+      - "5003:5003"
+    volumes:
+      - .:/app
+      - ./uploads:/app/uploads
+    env_file:
+      - .env
+    restart: on-failure
+    command: ["flask", "--app", "app:create_app()", "run", "--debug", "--host=0.0.0.0", "--port=5003"]
+    networks:
+      - default
+      - mysql
+
+networks:
+  mysql:
+    external: true

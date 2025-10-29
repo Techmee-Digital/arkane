@@ -1,14 +1,18 @@
 services:
   arkane-web:
-    image: ghcr.io/techmee-digital/arkane:latest
+    image: ${IMAGE_REGISTRY}/${IMAGE_OWNER}/${IMAGE_NAME}:${IMAGE_TAG}
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: arkane-web
     ports:
-      - "127.0.0.1:5003:5000"
+      - "5003:5003"
     volumes:
       - ./uploads:/app/uploads
     env_file:
       - .env
     restart: unless-stopped
+    command: ["gunicorn", "--bind", "0.0.0.0:5003", "app:create_app()"]
     networks:
       - default
       - mysql
