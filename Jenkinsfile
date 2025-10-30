@@ -15,11 +15,11 @@ pipeline {
     ENVFILE         = credentials('env_arkane')
 
     // files to move from TEMP to the permanent directory
-    DEPLOY_FILES    = 'docker-compose.prod.yml .env  credentials.json'
+    DEPLOY_FILES    = 'docker-compose.prod.yml .env'
   }
 
   stages {
-    stage('Load env from credentials') {
+    stage('Load env from Jenkins credentials') {
       steps {
         script {
           // load all key value pairs from your env file into Jenkins environment
@@ -67,7 +67,7 @@ pipeline {
       }
     }
 
-    stage('Clone fresh into TEMP main') {
+    stage('Clone main branch into TEMP dir') {
       steps {
         dir("${env.TEMP_DIR}") {
           checkout([
@@ -79,7 +79,7 @@ pipeline {
       }
     }
 
-    stage('Place env into TEMP_DIR') {
+    stage('Place env into TEMP dir') {
       steps {
         sh '''
           set +x
@@ -108,7 +108,7 @@ pipeline {
       }
     }
 
-    stage('Build image using compose and env placeholders') {
+    stage('Build image') {
       steps {
         sh '''
           bash -lc '
@@ -142,7 +142,7 @@ pipeline {
       }
     }
 
-    stage('Compose Down permanent dir') {
+    stage('Compose Down existing image') {
       steps {
         sh '''
           bash -lc '
@@ -158,7 +158,7 @@ pipeline {
       }
     }
 
-    stage('Compose Up permanent dir') {
+    stage('Compose Up new image') {
       steps {
         sh '''
           bash -lc '
@@ -176,7 +176,7 @@ pipeline {
       }
     }
 
-    stage('Push image using env placeholders') {
+    stage('Push image to GHCR') {
       steps {
         sh '''
           bash -lc '
@@ -194,7 +194,7 @@ pipeline {
       }
     }
 
-    stage('Prune dangling') {
+    stage('Prune dangling (old, untagged) images') {
       steps {
         sh '''
           bash -lc '
@@ -220,7 +220,7 @@ pipeline {
     success {
       script {
         def ref = "${env.IMAGE_REGISTRY}/${env.IMAGE_OWNER}/${env.IMAGE_NAME}:${env.IMAGE_TAG}"
-        echo "Built deployed pushed ${ref}"
+        echo "Built, deployed and pushed: ${ref}"
       }
     }
   }
